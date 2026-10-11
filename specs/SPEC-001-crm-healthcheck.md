@@ -42,11 +42,12 @@ class HealthStatus(BaseModel):
 
 ## 4. Plano de Decomposição (Sub-Tarefas)
 
-- [ ] **Sub-tarefa 1 (`paralax-evo-crm`):**
+- [x] **Sub-tarefa 1 (`paralax-evo-crm`):** [PR #8](https://github.com/paralax-ia/paralax-evo-crm/pull/8)
   - Adicionar método assíncrono `health_check()` na classe `CRMAPIClient`.
   - Adicionar modelo `HealthStatus`.
   - Criar testes unitários em `tests/`.
 
-- [ ] **Sub-tarefa 2 (`customer-support-vehicles`):**
-  - Adicionar chamada de verificação de saúde na inicialização ou rota `/health`.
+- [x] **Sub-tarefa 2 (`customer-support-vehicles`):** [PR #7](https://github.com/paralax-ia/customer-support-vehicles/pull/7)
+  - Adicionar chamada de verificação de saúde na rota `/crm/health`.
   - Validar fallback seguro caso o CRM esteja indisponível.
+
