@@ -1,0 +1,37 @@
+name: Spec Governance & Linting
+
+on:
+  pull_request:
+    paths:
+      - 'specs/**'
+      - 'capabilities/**'
+      - '.spectral.yaml'
+
+jobs:
+  lint-specs:
+    name: Lint OpenAPI & Markdown Specs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Spec Linters
+        run: |
+          npm install -g @stoplight/spectral-cli @redocly/cli markdownlint-cli
+
+      - name: Lint Markdown Files
+        run: |
+          markdownlint "specs/**/*.md" --ignore node_modules || true
+
+      - name: Lint OpenAPI Contracts
+        run: |
+          if ls specs/**/*.yaml 1> /dev/null 2>&1 || ls specs/**/*.json 1> /dev/null 2>&1; then
+            spectral lint "specs/**/*.{yaml,yml,json}" --ruleset .spectral.yaml
+          else
+            echo "Nenhum contrato OpenAPI detectado em specs/ para validar nesta execucao."
+          fi

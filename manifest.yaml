@@ -1,0 +1,65 @@
+version: "1.0"
+project: "paralax-ia"
+description: "Catálogo de repositórios oficiais e governança de especificações do ecossistema Paralax IA"
+
+repositories:
+  # Agentes de IA
+  - name: "customer-support-vehicles"
+    repo: "paralax-ia/customer-support-vehicles"
+    role: "ai-agent"
+    language: "python"
+    entrypoint: "vehicles"
+    dockerfile: "Dockerfile"
+
+  - name: "duo-dermato-support"
+    repo: "paralax-ia/duo-dermato-support"
+    role: "ai-agent"
+    language: "python"
+    entrypoint: "duo_dermato"
+    dockerfile: "Dockerfile"
+
+  - name: "google-calendar-agent"
+    repo: "paralax-ia/google-calendar-agent"
+    role: "a2a-agent"
+    language: "python"
+    entrypoint: "google_calendar"
+    dockerfile: "Dockerfile"
+
+  - name: "paralax-support"
+    repo: "paralax-ia/paralax-support"
+    role: "ai-agent"
+    language: "python"
+    entrypoint: "support"
+    dockerfile: "Dockerfile"
+
+  - name: "anero-cafe-support"
+    repo: "paralax-ia/anero-cafe-support"
+    role: "ai-agent"
+    language: "python"
+    entrypoint: "anero_cafe"
+    dockerfile: "Dockerfile"
+
+  # Bibliotecas Compartilhadas
+  - name: "paralax-agents-common"
+    repo: "paralax-ia/paralax-agents-common"
+    role: "shared-library"
+    language: "python"
+
+  - name: "paralax-evo-crm"
+    repo: "paralax-ia/paralax-evo-crm"
+    role: "sdk"
+    language: "python"
+
+  # Plataforma de Canais e Mensageria
+  - name: "evo-bot-runtime"
+    repo: "paralax-ia/evo-bot-runtime"
+    role: "orchestrator"
+    language: "go"
+    dockerfile: "Dockerfile"
+
+  # CRM Core
+  - name: "evo-ai-crm-community"
+    repo: "paralax-ia/evo-ai-crm-community"
+    role: "crm-backend"
+    language: "ruby"
+    dockerfile: "Dockerfile"
