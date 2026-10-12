@@ -1,0 +1,77 @@
+name: paralax-support
+role: ai-agent
+language: python
+description: Capacidades computacionais de paralax-support
+classes:
+- name: Config
+  docstring: Configuration settings for the support agent.
+  methods: []
+- name: Address
+  docstring: Represents a customer's address.
+  methods: []
+- name: Product
+  docstring: Represents a product in a customer's purchase history.
+  methods: []
+- name: Purchase
+  docstring: Represents a customer's purchase.
+  methods: []
+- name: CommunicationPreferences
+  docstring: Represents a customer's communication preferences.
+  methods: []
+- name: GardenProfile
+  docstring: Represents a customer's garden profile.
+  methods: []
+- name: Customer
+  docstring: Represents a customer.
+  methods:
+  - name: to_json
+    docstring: "Converts the Customer object to a JSON string.\n\nReturns:\n    A\
+      \ JSON string representing the Customer object."
+  - name: get_customer
+    docstring: "Retrieves a customer based on their ID.\n\nArgs:\n    customer_id:\
+      \ The ID of the customer to retrieve.\n\nReturns:\n    The Customer object if\
+      \ found, None otherwise."
+functions:
+- name: graceful_model_error_handler
+  docstring: 'Catches model runtime errors, logs the stack trace, and prevents raw
+    exception
+
+    leakage to the A2A streaming client by yielding a friendly fallback text.'
+- name: create_root_agent
+  docstring: Creates and returns the customer support agent.
+- name: request_human_handoff
+  docstring: "Performs a handoff to a human agent if the user explicitly requests\
+    \ to speak with\nan agent, human, or person, or if the conversation exhausts its\
+    \ response\nalternatives. This function transfers the conversation in the CRM.\n\
+    \nArgs:\n    reason: The reason why the handoff was requested (e.g., \"User requested\
+    \ to speak with an agent\").\n\nReturns:\n    A dictionary containing the result\
+    \ of the handoff operation."
+- name: before_model_callback
+  docstring: Invoked before calling the underlying LLM.
+- name: validate_customer_id
+  docstring: ''
+- name: lowercase_value
+  docstring: ''
+- name: before_tool
+  docstring: ''
+- name: after_tool
+  docstring: ''
+- name: before_agent
+  docstring: ''
+- name: run_crm
+  docstring: "Webhook endpoint to handle incoming messages from the CRM.\n\nValidates\
+    \ the payload, manages Redis session mapping between the CRM context\nand the\
+    \ Vertex AI session, invokes the agent response generator, and\nasynchronously\
+    \ saves the conversational memory.\n\nArgs:\n    request: The incoming CRM JSON-RPC\
+    \ request.\n    \nReturns:\n    A JSON-RPC response dict formatted for the CRM."
+- name: load_env
+  docstring: ''
+- name: test_eval_simple
+  docstring: "Business Rule: The system must successfully pass baseline evaluation\
+    \ metrics \nfor simple interactions to ensure core functionality.\nTest the agent's\
+    \ basic ability via a session file."
+- name: test_eval_full_conversation
+  docstring: "Business Rule: The system must successfully pass evaluation metrics\
+    \ for full, \nmulti-turn conversations to ensure sustained context management.\n\
+    Test the agent's basic ability via a session file."
+routes: []
