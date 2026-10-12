@@ -1,0 +1,103 @@
+name: google-calendar-agent
+role: a2a-agent
+language: python
+description: Capacidades computacionais de google-calendar-agent
+classes:
+- name: AgentModel
+  docstring: Agent model settings.
+  methods: []
+- name: Config
+  docstring: 'Configuration settings for the google_calendar agent.
+
+
+    All settings are loaded from environment variables. Variables without
+
+    a prefix are read as-is; variables with GOOGLE_ prefix use pydantic''s
+
+    env_prefix mechanism.'
+  methods: []
+functions:
+- name: health_check
+  docstring: Health check endpoint for Kubernetes liveness and readiness probes.
+- name: build_custom_card
+  docstring: ''
+- name: run_async_safely
+  docstring: Executa coroutines de forma segura no nível do módulo (evita RuntimeError
+    do Uvicorn).
+- name: model_fallback_error_handler
+  docstring: "Retries the LLM call using the ordered fallback model list on transient\
+    \ errors.\n\nIntercepts transient provider errors (ServiceUnavailable, ResourceExhausted,\n\
+    ServerError) and sequentially tries each model in config.agent_settings.fallback_models.\n\
+    Returns None (passes through to the next callback) on non-transient errors or\n\
+    when no fallback succeeds.\n\nArgs:\n    context: The ADK callback context for\
+    \ the current invocation.\n    llm_request: The original LLM request that triggered\
+    \ the error.\n    exception: The exception raised by the primary model call.\n\
+    \nReturns:\n    An LlmResponse from the first successful fallback model, or None\
+    \ if the\n    error is non-transient or all fallbacks are exhausted."
+- name: graceful_model_error_handler
+  docstring: "Final fallback: logs the error and returns a user-friendly static response.\n\
+    \nThis handler runs after all model fallbacks are exhausted. It prevents raw\n\
+    exception leakage to the A2A streaming client.\n\nArgs:\n    context: The ADK\
+    \ callback context for the current invocation.\n    llm_request: The original\
+    \ LLM request that triggered the error.\n    exception: The exception raised.\n\
+    \nReturns:\n    An LlmResponse with a user-friendly error message."
+- name: create_root_agent
+  docstring: "Creates and returns the Google Calendar agent.\n\nReturns:\n    Configured\
+    \ ADK Agent instance."
+- name: build_calendar_service
+  docstring: "Builds a Google Calendar API service client.\n\nUses Workload Identity\
+    \ credentials from the pod to impersonate the\nconfigured agent email via Domain-Wide\
+    \ Delegation. In local development\n(SA_EMAIL not set), uses Application Default\
+    \ Credentials directly.\n\nReturns:\n    A Google Calendar API Resource ready\
+    \ for API calls.\n\nRaises:\n    google.auth.exceptions.DefaultCredentialsError:\
+    \ If no credentials found.\n    google.auth.exceptions.TransportError: On network\
+    \ errors during auth."
+- name: list_doctors
+  docstring: "Lista todos os médicos cujos calendários foram compartilhados com o\
+    \ agente.\n\nChama calendarList.list() impersonando o usuário agente da clínica\
+    \ via\nDomain-Wide Delegation. O resultado é cacheado por CALENDAR_LIST_CACHE_TTL_SECONDS\n\
+    para reduzir chamadas à API.\n\nReturns:\n    Lista de dicts com informações dos\
+    \ médicos:\n    [{\"name\": str, \"calendar_id\": str, \"description\": str}]"
+- name: check_availability
+  docstring: "Verifica disponibilidade de todos os médicos em um intervalo de tempo.\n\
+    \nArgs:\n    date_from: Data/hora de início no formato ISO 8601 (ex: '2026-09-15T08:00:00').\n\
+    \    date_to: Data/hora de fim no formato ISO 8601 (ex: '2026-09-15T18:00:00').\n\
+    \    duration_minutes: Duração desejada do agendamento em minutos (padrão: 30).\n\
+    \nReturns:\n    Lista de slots disponíveis:\n    [{\"doctor_name\": str, \"calendar_id\"\
+    : str, \"start\": str, \"end\": str}]"
+- name: create_appointment
+  docstring: "Cria um agendamento no calendário do médico.\n\nArgs:\n    calendar_id:\
+    \ ID do calendário do médico (email ou ID do Google Calendar).\n    patient_name:\
+    \ Nome completo do paciente.\n    patient_contact: Telefone ou email do paciente\
+    \ para contato.\n    start: Horário de início no formato ISO 8601 com timezone.\n\
+    \    end: Horário de fim no formato ISO 8601 com timezone.\n    notes: Observações\
+    \ opcionais sobre o agendamento.\n    patient_email: Email do paciente para enviar\
+    \ o convite de calendário e confirmação.\n\nReturns:\n    Dict com informações\
+    \ do evento criado: {\"event_id\": str, \"link\": str, \"start\": str, \"end\"\
+    : str}\n\nRaises:\n    ValueError: Se calendar_id não estiver na lista de médicos\
+    \ autorizados.\n    googleapiclient.errors.HttpError: Em caso de erro na API do\
+    \ Calendar."
+- name: list_appointments
+  docstring: "Lista os agendamentos de um médico em uma data específica.\n\nArgs:\n\
+    \    calendar_id: ID do calendário do médico.\n    date: Data no formato YYYY-MM-DD\
+    \ (ex: '2026-09-15').\n\nReturns:\n    Lista de eventos: [{\"event_id\": str,\
+    \ \"summary\": str, \"start\": str, \"end\": str}]"
+- name: cancel_appointment
+  docstring: "Cancela um agendamento no calendário do médico.\n\nArgs:\n    calendar_id:\
+    \ ID do calendário do médico.\n    event_id: ID do evento a cancelar.\n    reason:\
+    \ Motivo do cancelamento (adicionado como comentário antes de deletar).\n\nReturns:\n\
+    \    Dict de confirmação: {\"status\": \"cancelled\", \"event_id\": str}\n\nRaises:\n\
+    \    ValueError: Se calendar_id não estiver na lista de médicos autorizados.\n\
+    \    googleapiclient.errors.HttpError: Se o evento não for encontrado ou erro\
+    \ de API."
+- name: reschedule_appointment
+  docstring: "Reagenda (altera o horário de) um evento existente no calendário.\n\n\
+    Args:\n    calendar_id: ID do calendário do médico.\n    event_id: ID do evento\
+    \ que será remarcado.\n    new_start: Novo horário de início no formato ISO 8601\
+    \ com timezone.\n    new_end: Novo horário de fim no formato ISO 8601 com timezone.\n\
+    \    reason: Motivo do reagendamento (opcional, será anexado à descrição).\n\n\
+    Returns:\n    Dict com a confirmação: {\"status\": \"rescheduled\", \"event_id\"\
+    : str, \"start\": str, \"end\": str}\n\nRaises:\n    ValueError: Se calendar_id\
+    \ não for autorizado.\n    googleapiclient.errors.HttpError: Erro da API do Google\
+    \ Calendar."
+routes: []
