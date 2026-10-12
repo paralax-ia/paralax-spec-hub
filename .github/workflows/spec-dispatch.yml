@@ -94,9 +94,21 @@ jobs:
       - name: Executar Fan-Out nos Repositórios Spokes
         if: steps.params.outputs.spec_file != ''
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.FLYWHEEL_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          DISPATCH_TOKEN: ${{ secrets.FLYWHEEL_DISPATCH_TOKEN }}
           PYTHONPATH: .flywheel_src/src
         run: |
+          if [ -n "$APP_TOKEN" ]; then
+            export GH_TOKEN="$APP_TOKEN"
+          elif [ -n "$DISPATCH_TOKEN" ]; then
+            export GH_TOKEN="$DISPATCH_TOKEN"
+          else
+            export GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          fi
+
+          echo "Verificando autenticação no GitHub CLI:"
+          gh auth status || true
+
           EXTRA_ARGS=""
           if [ -n "${{ steps.params.outputs.pr_number }}" ]; then
             EXTRA_ARGS="$EXTRA_ARGS --hub-pr ${{ steps.params.outputs.pr_number }}"
@@ -110,3 +122,4 @@ jobs:
             --manifest manifest.yaml \
             --hub-repo "${{ github.repository }}" \
             $EXTRA_ARGS
+
