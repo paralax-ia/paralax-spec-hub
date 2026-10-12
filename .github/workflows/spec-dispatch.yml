@@ -1,0 +1,111 @@
+name: Spec Fan-Out & Branch Orchestrator
+
+on:
+  pull_request:
+    types: [opened, labeled]
+    paths:
+      - 'specs/**'
+  workflow_dispatch:
+    inputs:
+      spec_path:
+        description: 'Caminho relativo da spec a processar (ex: specs/SPEC-001-crm-healthcheck.md)'
+        required: true
+        default: 'specs/SPEC-001-crm-healthcheck.md'
+        type: string
+      hub_pr_number:
+        description: 'Número do PR da spec no hub para comentar o checklist (opcional)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Executar em modo dry-run (apenas simulação)?'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  fanout:
+    name: "Executar Fan-Out e Abertura de Branches"
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && (
+        github.event.action == 'opened' ||
+        contains(github.event.pull_request.labels.*.name, 'spec-ready')
+      ))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout Spec Hub
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Agentic Flywheel
+        uses: actions/checkout@v4
+        with:
+          repository: 'eduardosan/agentic-flywheel'
+          path: '.flywheel_src'
+          ref: 'main'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Dependências do Orquestrador
+        run: |
+          pip install pyyaml pydantic
+
+      - name: Gerar Token de Instalação da GitHub App (se secrets disponíveis)
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Determinar Parâmetros de Execução
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SPEC_FILE="${{ inputs.spec_path }}"
+            PR_NUM="${{ inputs.hub_pr_number }}"
+            DRY_RUN="${{ inputs.dry_run }}"
+          else
+            # No pull_request, identifica qual arquivo de spec foi alterado
+            SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/.*\.md$' | head -n 1)
+            PR_NUM="${{ github.event.pull_request.number }}"
+            DRY_RUN="false"
+          fi
+
+          if [ -z "$SPEC_FILE" ]; then
+            echo "Nenhum arquivo de spec modificado encontrado."
+            exit 0
+          fi
+
+          echo "spec_file=$SPEC_FILE" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Executar Fan-Out nos Repositórios Spokes
+        if: steps.params.outputs.spec_file != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.FLYWHEEL_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
+          PYTHONPATH: .flywheel_src/src
+        run: |
+          EXTRA_ARGS=""
+          if [ -n "${{ steps.params.outputs.pr_number }}" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --hub-pr ${{ steps.params.outputs.pr_number }}"
+          fi
+          if [ "${{ steps.params.outputs.dry_run }}" = "true" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --dry-run"
+          fi
+
+          python3 -m flywheel.fanout \
+            --spec "${{ steps.params.outputs.spec_file }}" \
+            --manifest manifest.yaml \
+            --hub-repo "${{ github.repository }}" \
+            $EXTRA_ARGS
