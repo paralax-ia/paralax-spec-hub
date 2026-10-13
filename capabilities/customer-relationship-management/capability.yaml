@@ -1,51 +1,62 @@
-version: "1.0"
-capability_id: "customer-relationship-management"
-name: "Gestão de Relacionamento com Clientes e Contatos (CRM)"
-subdomain_type: "supporting"
-description: >
-  Capacidade corporativa responsável pela gestão de identidades de contatos,
+version: '1.0'
+capability_id: customer-relationship-management
+name: Gestão de Relacionamento com Clientes e Contatos (CRM)
+subdomain_type: supporting
+description: Capacidade corporativa responsável pela gestão de identidades de contatos,
   histórico de conversas, controle de expediente de atendimento e transbordo humano.
-
 ubiquitous_language:
-  Contact: "Indivíduo identificado por telefone no padrão internacional E.164 e UUID corporativo."
-  Conversation: "Sessão de interação contínua entre um Contact e os canais de atendimento."
-  Inbox: "Canal e caixa de entrada associada a regras de negócio específicas."
-  WorkingHours: "Janela semanal de atendimento que define a disponibilidade de operadores."
-  OutOfOffice: "Condição de negócio em que a organização está fora do horário de expediente comercial."
-  HealthStatus: "Estado de conectividade e disponibilidade operacional do CRM."
-
+  Contact: Indivíduo identificado por telefone no padrão internacional E.164 e UUID
+    corporativo.
+  Conversation: Sessão de interação contínua entre um Contact e os canais de atendimento.
+  Inbox: Canal e caixa de entrada associada a regras de negócio específicas.
+  WorkingHours: Janela semanal de atendimento que define a disponibilidade de operadores.
+  OutOfOffice: Condição de negócio em que a organização está fora do horário de expediente
+    comercial.
+  HealthStatus: Estado de conectividade e disponibilidade operacional do CRM.
 context_map:
-  upstream_authoritative: "evo-ai-crm-community"
-  sdk_layer: "paralax-evo-crm"
+  upstream_authoritative: evo-ai-crm-community
+  sdk_layer: paralax-evo-crm
   downstream_consumers:
-    - "customer-support-vehicles"
-    - "duo-dermato-support"
-    - "paralax-support"
-    - "anero-cafe-support"
-
+  - customer-support-vehicles
+  - duo-dermato-support
+  - paralax-support
+  - anero-cafe-support
 specs:
-  - id: "SPEC-001"
-    title: "Health Check Unificado e Consulta de Status via CRM"
-    status: "MERGED"
-    spec_path: "specs/SPEC-001-crm-healthcheck.md"
-
-  - id: "SPEC-002"
-    title: "Mensageria e Gestão de Expediente do CRM"
-    status: "MERGED"
-    spec_path: "specs/SPEC-002-crm-messaging-schedule.md"
-
+- id: SPEC-001
+  title: Health Check Unificado e Consulta de Status via CRM
+  status: MERGED
+  spec_path: specs/SPEC-001-crm-healthcheck.md
+- id: SPEC-002
+  title: Mensageria e Gestão de Expediente do CRM
+  status: MERGED
+  spec_path: specs/SPEC-002-crm-messaging-schedule.md
 runtime_contracts:
   classes:
-    - name: "CRMAPIClient"
-      methods:
-        - "health_check"
-        - "send_message"
-        - "check_out_of_office"
-        - "get_conversation_sync"
-        - "get_inbox_sync"
-        - "get_schedule_summary"
-        - "toggle_conversation_status"
-    - name: "HealthStatus"
-    - name: "CrmMessage"
-    - name: "CrmRequest"
-    - name: "CrmResponse"
+  - name: CrmMessagePart
+    methods: []
+  - name: CrmMessage
+    methods:
+    - get_text
+  - name: CrmParams
+    methods: []
+  - name: CrmRequest
+    methods: []
+  - name: CrmResponseResult
+    methods: []
+  - name: CrmResponse
+    methods: []
+  - name: HealthStatus
+    methods: []
+  - name: CRMAPIError
+    methods: []
+  - name: CRMSendMessageError
+    methods: []
+  - name: CRMAPIClient
+    methods:
+    - send_message
+    - toggle_conversation_status
+    - get_conversation_sync
+    - get_inbox_sync
+    - get_schedule_summary
+    - check_out_of_office
+    - health_check

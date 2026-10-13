@@ -1,0 +1,68 @@
+name: Business Capabilities Continuous Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Executa todo domingo à meia-noite UTC
+    - cron: '0 0 * * 0'
+
+jobs:
+  sync:
+    name: Sincronizar Business Capabilities (DDD)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Spec Hub
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Agentic Flywheel
+        uses: actions/checkout@v4
+        with:
+          repository: 'eduardosan/agentic-flywheel'
+          path: '.flywheel_src'
+          ref: 'main'
+          token: ${{ secrets.FLYWHEEL_DISPATCH_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Dependências
+        run: |
+          pip install pyyaml pydantic
+
+      - name: Executar Auditoria e Sincronização
+        env:
+          FLYWHEEL_DIR: '.flywheel_src'
+        run: |
+          ./bin/capabilities audit
+          ./bin/capabilities sync
+
+      - name: Verificar se há alterações nos contratos
+        id: git-check
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain capabilities/)" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Criar Pull Request se houver Drift de Contratos
+        if: steps.git-check.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.FLYWHEEL_DISPATCH_TOKEN }}
+          commit-message: "chore(capabilities): automated sync of runtime contracts"
+          branch: "chore/automated-capabilities-sync"
+          title: "chore(capabilities): sincronização automática de contratos de runtime"
+          body: |
+            ## Sincronização Automática de Business Capabilities (DDD)
+            Detectadas alterações nos contratos e classes implementadas nos repositórios.
+            Este PR atualiza `capabilities/*/capability.yaml` com o estado real do código.
+          labels: "capabilities, automated-pr"
