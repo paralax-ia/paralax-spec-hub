@@ -16,10 +16,31 @@ O **`paralax-spec-hub`** é o repositório central de governança, arquitetura e
 
 ---
 
-## 2. Anatomia de uma Especificação (`specs/SPEC-XXX-nome.md`)
+## 2. As Business Capabilities (DDD) e a Relação com Specs
+
+A plataforma organiza o ecossistema segundo os princípios de **Domain-Driven Design (DDD)**:
+
+1. **Business Capabilities (Bounded Contexts):** Residem em `capabilities/<capability-id>/capability.yaml`. Representam capacidades corporativas perenes (ex: `customer-relationship-management`, `conversational-ai-agent`, `appointment-scheduling`).
+   - **Linguagem Ubíqua (`ubiquitous_language`):** Vocabulário formal do domínio (ex: `Contact`, `WorkingHours`, `OutOfOffice`).
+   - **Context Map (`context_map`):** Define upstream autoritativo, camada de SDK e consumidores.
+   - **Contratos de Runtime (`runtime_contracts`):** Classes e métodos implementados no código real.
+2. **Relação 1 Capability : N Specs:** Cada especificação (`specs/SPEC-XXX.md`) é um incremento dentro de uma capacidade pai. Toda spec deve apontar em seu cabeçalho para sua respectiva Business Capability:
+   ```markdown
+   # SPEC-002: Mensageria e Gestão de Expediente do CRM
+   > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)
+   > **Bounded Context:** CRM (Supporting Subdomain)
+   ```
+3. **Auditoria e Sincronização Contínua de Contratos:**
+   - **Auditar Cobertura de Domínio:** `just audit-capabilities` ou `./bin/capabilities audit` (compara a Linguagem Ubíqua com classes/docstrings do código real).
+   - **Sincronizar Contratos de Código:** `just sync-capabilities` ou `./bin/capabilities sync` (atualiza os `runtime_contracts` na `capability.yaml`).
+   - **Fechamento Transacional:** O Cross-Repo Gate (`gate.py`) atualiza automaticamente o status da spec para `MERGED` na capability ao aprovar o gate com Score 100/100.
+
+---
+
+## 3. Anatomia de uma Especificação (`specs/SPEC-XXX-nome.md`)
 
 Toda spec deve conter a seguinte estrutura padronizada:
-- **Metadados:** ID (`SPEC-XXX`), Título, Status (`DRAFT`, `PLANNED`, `IN_PROGRESS`, `READY`, `MERGED`), Data e Autor.
+- **Metadados:** ID (`SPEC-XXX`), Título, Status (`DRAFT`, `PLANNED`, `IN_PROGRESS`, `READY`, `MERGED`), Data, Autor e **Business Capability Pai**.
 - **Contexto e Motivação:** Problema de negócio que a funcionalidade resolve.
 - **Escopo e Repositórios Afetados:** Lista de spokes envolvidos classificados por Onda (`wave: 1`, `wave: 2`).
 - **Contratos de Interface:** Esquemas OpenAPI 3.1, assinaturas de métodos de SDKs Python ou payloads de mensageria.
