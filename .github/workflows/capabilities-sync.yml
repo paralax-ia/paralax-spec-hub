@@ -36,12 +36,12 @@ jobs:
         run: |
           pip install pyyaml pydantic
 
-      - name: Executar Auditoria e Sincronização
+      - name: Executar Auditoria e Sincronização via Agentic Flywheel
         env:
-          FLYWHEEL_DIR: '.flywheel_src'
+          PYTHONPATH: '.flywheel_src/src'
         run: |
-          ./bin/capabilities audit
-          ./bin/capabilities sync
+          python3 -m flywheel.capabilities audit --spec-hub-dir .
+          python3 -m flywheel.capabilities sync --spec-hub-dir .
 
       - name: Verificar se há alterações nos contratos
         id: git-check
