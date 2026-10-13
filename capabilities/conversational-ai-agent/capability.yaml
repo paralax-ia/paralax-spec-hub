@@ -1,36 +1,35 @@
-version: "1.0"
-capability_id: "conversational-ai-agent"
-name: "Orquestração Conversacional e Resiliência de Agentes de IA"
-subdomain_type: "core"
-description: >
-  Habilidade central de engajamento conversacional dos agentes de IA, cobrindo
-  fallback dinâmico de modelos, observabilidade via tracing (Langfuse),
-  heartbeat de progresso em chamadas lentas e gestão de estado de sessão.
-
+version: '1.0'
+capability_id: conversational-ai-agent
+name: Orquestração Conversacional e Resiliência de Agentes de IA
+subdomain_type: core
+description: Habilidade central de engajamento conversacional dos agentes de IA, cobrindo
+  fallback dinâmico de modelos, observabilidade via tracing (Langfuse), heartbeat
+  de progresso em chamadas lentas e gestão de estado de sessão.
 ubiquitous_language:
-  AgentBot: "Entidade autônoma de IA que responde conversas no CRM via ADK."
-  FallbackModel: "Modelo reserva invocado em caso de esgotamento transitório (429/503)."
-  Heartbeat: "Mensagem intermediária de progresso enviada durante execuções prolongadas."
-  SessionState: "Estado persistente de contexto conversacional e memória do agente."
-  TraceContext: "Identificador distribuído para correlação e observabilidade no Langfuse."
-
+  AgentBot: Entidade autônoma de IA que responde conversas no CRM via ADK.
+  FallbackModel: Modelo reserva invocado em caso de esgotamento transitório (429/503).
+  Heartbeat: Mensagem intermediária de progresso enviada durante execuções prolongadas.
+  SessionState: Estado persistente de contexto conversacional e memória do agente.
+  TraceContext: Identificador distribuído para correlação e observabilidade no Langfuse.
 context_map:
-  upstream_authoritative: "google-antigravity-adk"
-  sdk_layer: "paralax-agents-common"
+  upstream_authoritative: google-antigravity-adk
+  sdk_layer: paralax-agents-common
   downstream_consumers:
-    - "customer-support-vehicles"
-    - "duo-dermato-support"
-    - "paralax-support"
-    - "anero-cafe-support"
-
+  - customer-support-vehicles
+  - duo-dermato-support
+  - paralax-support
+  - anero-cafe-support
 specs:
-  - id: "SPEC-003"
-    title: "Orquestração de Respostas de IA, Fallback de Modelos e Heartbeat"
-    status: "PROPOSED"
-    spec_path: "specs/SPEC-003-ai-response-orchestration.md"
-
+- id: SPEC-003
+  title: Orquestração de Respostas de IA, Fallback de Modelos e Heartbeat
+  status: PROPOSED
+  spec_path: specs/SPEC-003-ai-response-orchestration.md
 runtime_contracts:
   classes:
-    - name: "LangfuseTracer"
-    - name: "AgentContext"
-    - name: "HeartbeatEmitter"
+  - name: PrivacyMaskingSpanProcessor
+    methods:
+    - on_start
+    - on_end
+  - name: CodeBlockReplacer
+    methods:
+    - save_code
