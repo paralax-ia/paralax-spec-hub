@@ -1,0 +1,15 @@
+version: "1.0"
+product_id: "customer-support-vehicles"
+name: "Dealership & Vehicles Customer Support"
+client_segment: "Automotive Dealerships & Retail"
+description: >
+  Solução de inteligência artificial para atendimento, triagem e qualificação de leads
+  em concessionárias e revendas de veículos automotores.
+
+repositories:
+  - "customer-support-vehicles"
+
+capabilities:
+  - "conversational-ai-agent"
+  - "customer-relationship-management"
+  - "omnichannel-messaging"

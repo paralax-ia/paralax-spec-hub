@@ -1,0 +1,15 @@
+version: "1.0"
+product_id: "anero-cafe-support"
+name: "Anero Café Customer Concierge"
+client_segment: "Specialty Coffee & Food Service"
+description: >
+  Concierge virtual para atendimento a clientes, cardápio, reservas e pedidos
+  para a cafeteria de cafés especiais Anero Café.
+
+repositories:
+  - "anero-cafe-support"
+
+capabilities:
+  - "conversational-ai-agent"
+  - "customer-relationship-management"
+  - "omnichannel-messaging"

@@ -16,24 +16,51 @@ O **`paralax-spec-hub`** é o repositório central de governança, arquitetura e
 
 ---
 
-## 2. As Business Capabilities (DDD) e a Relação com Specs
+## 2. A Hierarquia DDD: Produtos, Business Capabilities e Specs
 
-A plataforma organiza o ecossistema segundo os princípios de **Domain-Driven Design (DDD)**:
+A plataforma organiza o ecossistema segundo os princípios de **Domain-Driven Design (DDD)** em três camadas estratégicas:
 
-1. **Business Capabilities (Bounded Contexts):** Residem em `capabilities/<capability-id>/capability.yaml`. Representam capacidades corporativas perenes (ex: `customer-relationship-management`, `conversational-ai-agent`, `appointment-scheduling`).
+```
+┌────────────────────────────────────────────────────────┐
+│           1. Produtos (Core Domains de Clientes)       │
+│  (ex: dealership-vehicles, duo-dermato, anero-cafe)    │
+└───────────────────────────┬────────────────────────────┘
+                            │ consome / orquestra
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│         2. Business Capabilities (Bounded Contexts)    │
+│ (ex: customer-relationship-management, scheduling...) │
+└───────────────────────────┬────────────────────────────┘
+                            │ implementa em incrementos
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│            3. Especificações Formais (Specs)           │
+│        (ex: SPEC-001, SPEC-002, SPEC-003)              │
+└────────────────────────────────────────────────────────┘
+```
+
+1. **Catálogo de Produtos (`products/<product-id>.yaml`):**
+   - Representa as soluções completas entregues aos clientes finais ou serviços internos.
+   - Define o segmento de mercado (`client_segment`), repositórios que compõem a solução e a lista de capacidades consumidas.
+2. **Business Capabilities (Bounded Contexts):** Residem em `capabilities/<capability-id>/capability.yaml`. Representam capacidades corporativas perenes (ex: `customer-relationship-management`, `conversational-ai-agent`, `appointment-scheduling`).
+   - **Escopo (`scope`):** `platform` (transversal/compartilhada) ou `product-specific` (dedicada a um segmento).
+   - **Produtos Suportados (`supported_products`):** Lista de produtos que utilizam esta capacidade.
    - **Linguagem Ubíqua (`ubiquitous_language`):** Vocabulário formal do domínio (ex: `Contact`, `WorkingHours`, `OutOfOffice`).
    - **Context Map (`context_map`):** Define upstream autoritativo, camada de SDK e consumidores.
    - **Contratos de Runtime (`runtime_contracts`):** Classes e métodos implementados no código real.
-2. **Relação 1 Capability : N Specs:** Cada especificação (`specs/SPEC-XXX.md`) é um incremento dentro de uma capacidade pai. Toda spec deve apontar em seu cabeçalho para sua respectiva Business Capability:
+3. **Relação Produto ➔ Capability ➔ Spec:** Cada especificação (`specs/SPEC-XXX.md`) é um incremento dentro de um Produto e de uma Business Capability pai. Toda spec deve apontar em seu cabeçalho:
    ```markdown
    # SPEC-002: Mensageria e Gestão de Expediente do CRM
+   > **Product:** [`customer-support-vehicles`](../products/customer-support-vehicles.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)
    > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)
+   > **Scope:** Platform
    > **Bounded Context:** CRM (Supporting Subdomain)
    ```
-3. **Auditoria e Sincronização Contínua de Contratos (Ferramentas Centrais):**
+4. **Auditoria e Sincronização Contínua de Contratos (Ferramentas Centrais):**
    O spec hub não contém código executável. As operações de domínio são executadas através do motor central `agentic-flywheel` (ou CLI `harness-state`):
-   - **Auditar Cobertura de Domínio:** `python -m flywheel.capabilities audit --spec-hub-dir .` (cruza a Linguagem Ubíqua com o código real).
-   - **Sincronizar Contratos de Código:** `python -m flywheel.capabilities sync --spec-hub-dir .` (atualiza os `runtime_contracts` no `capability.yaml`).
+   - **Mapear Todo o Ecossistema:** `flywheel map-all --spec-hub-dir .` (inventaria Produtos ➔ Capacidades ➔ Contratos de Runtime).
+   - **Auditar Cobertura de Domínio:** `flywheel audit --spec-hub-dir .` (cruza a Linguagem Ubíqua com o código real).
+   - **Sincronizar Contratos de Código:** `flywheel sync --spec-hub-dir .` (atualiza os `runtime_contracts` no `capability.yaml`).
    - **Fechamento Transacional:** O Cross-Repo Gate (`gate.py`) no hub atualiza automaticamente o status da spec para `MERGED` na capability ao aprovar o gate com Score 100/100.
 
 ---

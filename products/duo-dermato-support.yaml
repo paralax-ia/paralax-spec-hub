@@ -1,0 +1,17 @@
+version: "1.0"
+product_id: "duo-dermato-support"
+name: "Duo Dermato Clinic Support & Scheduling"
+client_segment: "Dermatological & Medical Clinics"
+description: >
+  Assistente virtual de atendimento humanizado, triagem dermatológica e agendamento
+  de consultas médicas integradas ao Google Calendar para a clínica Duo Dermato.
+
+repositories:
+  - "duo-dermato-support"
+  - "google-calendar-agent"
+
+capabilities:
+  - "conversational-ai-agent"
+  - "appointment-scheduling"
+  - "customer-relationship-management"
+  - "omnichannel-messaging"

@@ -1,6 +1,8 @@
 # SPEC-001: Health Check Unificado e Consulta de Status via CRM
 
+> **Product:** [`customer-support-vehicles`](../products/customer-support-vehicles.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)  
 > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
+> **Scope:** Platform  
 > **Bounded Context:** CRM (Supporting Subdomain)  
 > **Status:** MERGED  
 > **Autor:** Eduardo F. Santos  
