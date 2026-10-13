@@ -1,0 +1,15 @@
+version: "1.0"
+product_id: "paralax-support"
+name: "Paralax IA Corporate Support"
+client_segment: "Internal B2B Support & SaaS Diagnostics"
+description: >
+  Agente de suporte corporativo para triagem técnica, diagnóstico de integridade da infraestrutura
+  e suporte operacional aos serviços e clientes da Paralax IA.
+
+repositories:
+  - "paralax-support"
+
+capabilities:
+  - "conversational-ai-agent"
+  - "customer-relationship-management"
+  - "omnichannel-messaging"

@@ -2,6 +2,9 @@ version: '1.0'
 capability_id: appointment-scheduling
 name: Agendamento de Consultas e Gestão de Calendários
 subdomain_type: core
+scope: product-specific
+supported_products:
+  - duo-dermato-support
 description: Capacidade de descoberta de horários livres, agendamento de consultas
   médicas e gestão de agendas integradas ao Google Workspace através de Domain-Wide
   Delegation (DWD).

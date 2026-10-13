@@ -1,0 +1,19 @@
+version: "1.0"
+product_id: "paralax-platform"
+name: "Paralax IA Core Platform"
+client_segment: "Internal Infrastructure & Shared Services"
+description: >
+  Plataforma central compartilhada de mensageria WhatsApp, conectores de CRM,
+  SDKs base, tracing com Langfuse e orquestração de microsserviços.
+
+repositories:
+  - "paralax-agents-common"
+  - "paralax-evo-crm"
+  - "evolution-api"
+  - "evo-bot-runtime"
+  - "evo-ai-crm-community"
+
+capabilities:
+  - "customer-relationship-management"
+  - "omnichannel-messaging"
+  - "conversational-ai-agent"

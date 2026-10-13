@@ -1,6 +1,8 @@
 # SPEC-003: Orquestração de Respostas de IA, Fallback de Modelos e Heartbeat
 
+> **Product:** [`customer-support-vehicles`](../products/customer-support-vehicles.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)  
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
+> **Scope:** Platform  
 > **Bounded Context:** IA Conversacional & Resiliência (Core Subdomain)  
 > **Status:** PROPOSED  
 > **Autor:** Eduardo F. Santos  

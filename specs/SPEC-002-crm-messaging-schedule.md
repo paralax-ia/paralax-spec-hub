@@ -1,6 +1,8 @@
 # SPEC-002: Mensageria e Gestão de Expediente do CRM
 
+> **Product:** [`customer-support-vehicles`](../products/customer-support-vehicles.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)  
 > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
+> **Scope:** Platform  
 > **Bounded Context:** CRM (Supporting Subdomain)  
 > **Status:** MERGED  
 > **Autor:** Eduardo F. Santos  

@@ -2,6 +2,13 @@ version: '1.0'
 capability_id: omnichannel-messaging
 name: Mensageria Omnichannel e Roteamento WhatsApp
 subdomain_type: core
+scope: platform
+supported_products:
+  - paralax-platform
+  - customer-support-vehicles
+  - duo-dermato-support
+  - anero-cafe-support
+  - paralax-support
 description: Capacidade de conexão a instâncias de WhatsApp, recepção de webhooks
   em tempo real, debouncing de mensagens rápidas e despacho de eventos para o runtime
   de bots.

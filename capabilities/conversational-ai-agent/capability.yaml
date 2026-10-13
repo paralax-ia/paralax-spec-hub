@@ -2,6 +2,13 @@ version: '1.0'
 capability_id: conversational-ai-agent
 name: Orquestração Conversacional e Resiliência de Agentes de IA
 subdomain_type: core
+scope: platform
+supported_products:
+  - paralax-platform
+  - customer-support-vehicles
+  - duo-dermato-support
+  - anero-cafe-support
+  - paralax-support
 description: Habilidade central de engajamento conversacional dos agentes de IA, cobrindo
   fallback dinâmico de modelos, observabilidade via tracing (Langfuse), heartbeat
   de progresso em chamadas lentas e gestão de estado de sessão.

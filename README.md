@@ -15,10 +15,13 @@ Repositório Central de Governança de Especificações (Spec-Driven Development
 ## 📂 Estrutura
 
 * **`manifest.yaml`**: Lista oficial de repositórios, papéis arquiteturais e dependências do ecossistema.
-* **`capabilities/`**: Business Capabilities modeladas sob Domain-Driven Design (DDD) como Bounded Contexts perenes (`capability.yaml`), contendo Linguagem Ubíqua, Context Map e contratos de runtime. Uma capability governa múltiplas specs (1:N).
-* **`specs/`**: Especificações de funcionalidades incrementais (`SPEC-001-...`) vinculadas à sua Business Capability pai.
+* **`products/`**: Catálogo de Produtos e Domínios de Clientes (`products/*.yaml`). Agrupa as soluções oferecidas a diferentes segmentos de negócio (ex: varejo automotivo, clínicas médicas, cafeterias, plataforma core).
+* **`capabilities/`**: Business Capabilities modeladas sob Domain-Driven Design (DDD) como Bounded Contexts perenes (`capability.yaml`), contendo Linguagem Ubíqua, Context Map, Escopo (Platform vs. Product-Specific) e contratos de runtime. Uma capability governa múltiplas specs (1:N) e pode atender múltiplos produtos.
+* **`specs/`**: Especificações de funcionalidades incrementais (`SPEC-001-...`) vinculadas ao seu Produto e à sua Business Capability pai.
 * **`.spectral.yaml`**: Regras e padrões de governança para contratos OpenAPI 3.1.
 * **`AGENTS.md`**: Diretrizes operacionais para agentes de IA que atuam neste hub.
+
+> **Hierarquia DDD:** `Product` ➔ `Business Capability` (Bounded Context) ➔ `Spec` (`SPEC-XXX`) ➔ `Runtime Contracts`.
 
 > **Nota Arquitetural:** O spec hub é um repositório **estritamente declarativo** (dados, contratos e especificações). As ferramentas de auditoria, sincronização e planejamento de capacidades residem centralmente no motor [`agentic-flywheel`](https://github.com/eduardosan/agentic-flywheel) e na CLI [`harness-state`](https://github.com/eduardosan/harness-state).
 
