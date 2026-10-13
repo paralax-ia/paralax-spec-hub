@@ -30,10 +30,11 @@ A plataforma organiza o ecossistema segundo os princípios de **Domain-Driven De
    > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)
    > **Bounded Context:** CRM (Supporting Subdomain)
    ```
-3. **Auditoria e Sincronização Contínua de Contratos:**
-   - **Auditar Cobertura de Domínio:** `just audit-capabilities` ou `./bin/capabilities audit` (compara a Linguagem Ubíqua com classes/docstrings do código real).
-   - **Sincronizar Contratos de Código:** `just sync-capabilities` ou `./bin/capabilities sync` (atualiza os `runtime_contracts` na `capability.yaml`).
-   - **Fechamento Transacional:** O Cross-Repo Gate (`gate.py`) atualiza automaticamente o status da spec para `MERGED` na capability ao aprovar o gate com Score 100/100.
+3. **Auditoria e Sincronização Contínua de Contratos (Ferramentas Centrais):**
+   O spec hub não contém código executável. As operações de domínio são executadas através do motor central `agentic-flywheel` (ou CLI `harness-state`):
+   - **Auditar Cobertura de Domínio:** `python -m flywheel.capabilities audit --spec-hub-dir .` (cruza a Linguagem Ubíqua com o código real).
+   - **Sincronizar Contratos de Código:** `python -m flywheel.capabilities sync --spec-hub-dir .` (atualiza os `runtime_contracts` no `capability.yaml`).
+   - **Fechamento Transacional:** O Cross-Repo Gate (`gate.py`) no hub atualiza automaticamente o status da spec para `MERGED` na capability ao aprovar o gate com Score 100/100.
 
 ---
 
