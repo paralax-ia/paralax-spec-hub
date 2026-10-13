@@ -1,6 +1,8 @@
 # SPEC-001: Health Check Unificado e Consulta de Status via CRM
 
-> **Status:** PROPOSED  
+> **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
+> **Bounded Context:** CRM (Supporting Subdomain)  
+> **Status:** MERGED  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-10-11  
 > **Repositórios Impactados:**  

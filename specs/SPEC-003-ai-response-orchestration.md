@@ -1,5 +1,7 @@
 # SPEC-003: Orquestração de Respostas de IA, Fallback de Modelos e Heartbeat
 
+> **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
+> **Bounded Context:** IA Conversacional & Resiliência (Core Subdomain)  
 > **Status:** PROPOSED  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-10-12  

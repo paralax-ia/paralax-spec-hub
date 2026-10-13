@@ -1,0 +1,29 @@
+version: "1.0"
+capability_id: "omnichannel-messaging"
+name: "Mensageria Omnichannel e Roteamento WhatsApp"
+subdomain_type: "core"
+description: >
+  Capacidade de conexão a instâncias de WhatsApp, recepção de webhooks em tempo real,
+  debouncing de mensagens rápidas e despacho de eventos para o runtime de bots.
+
+ubiquitous_language:
+  Instance: "Conexão ativa de WhatsApp vinculada a um QR Code e número telefônico."
+  InboundWebhook: "Payload HTTP enviado pela Evolution API contendo evento de mensagem recebida."
+  DebounceWindow: "Intervalo temporal para agrupar rajadas de mensagens consecutivas de um mesmo usuário."
+  DispatchPipeline: "Pipeline de despacho que encaminha mensagens para os agentes de atendimento adequados."
+
+context_map:
+  upstream_authoritative: "evolution-api"
+  sdk_layer: "evo-bot-runtime"
+  downstream_consumers:
+    - "evo-ai-crm-community"
+    - "customer-support-vehicles"
+    - "duo-dermato-support"
+    - "paralax-support"
+
+specs: []
+
+runtime_contracts:
+  endpoints:
+    - "/message/sendText"
+    - "/webhook/set"
