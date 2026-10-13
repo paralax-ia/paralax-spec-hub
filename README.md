@@ -18,6 +18,7 @@ Repositório Central de Governança de Especificações (Spec-Driven Development
 * **`capabilities/`**: Esquemas de capacidades declaradas por serviço (endpoints, eventos e regras de negócio).
 * **`specs/`**: Especificações de funcionalidades ativas e em evolução (`SPEC-001-...`).
 * **`.spectral.yaml`**: Regras e padrões de governança para contratos OpenAPI 3.1.
+* **`AGENTS.md`**: Diretrizes completas para agentes de IA (fluxos Local e Cloud, TDD, regras de engenharia).
 
 ---
 
@@ -31,3 +32,16 @@ Repositório Central de Governança de Especificações (Spec-Driven Development
 3. Abra o Pull Request neste repositório:
    - O CI validará os padrões e contratos via Spectral.
    - O **Planner** cruzará os requisitos com `capabilities/` e abrirá as sub-tarefas nos repositórios alvo.
+
+---
+
+## 🤖 Operação com Agentes de IA (Local vs. Cloud)
+
+A plataforma suporta dois fluxos de implementação para transformar especificações em código nos repositórios spoke:
+
+1. **Opção 1: Nuvem (Off the Loop - 100% Autônomo):** O planner cria as issues nos spokes com a label `agent-run`. Os runners dedicados na nuvem (Hetzner LXC CT 109) codificam via Aider + `agentic-qwen:7b` e abrem os PRs automaticamente.
+2. **Opção 2: Local (On the Loop - Pair-Programming):** O desenvolvedor ou agente local conecta ao Redis via túnel SSH, planeja as ondas e cria issues nos spokes **sem** a label `agent-run`. O código é desenvolvido localmente por ondas (Onda 1: SDKs ➔ Onda 2: Agentes), validado com `just verify`, e submetido via PR.
+
+Em ambos os modos, a aprovação final e merge transacional ocorrem através do **Cross-Repo Harness Gate**.
+
+👉 **Para o guia operacional completo com comandos, topologia e regras de engenharia, consulte:** [**`AGENTS.md`**](./AGENTS.md).
