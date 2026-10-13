@@ -15,10 +15,11 @@ Repositório Central de Governança de Especificações (Spec-Driven Development
 ## 📂 Estrutura
 
 * **`manifest.yaml`**: Lista oficial de repositórios, papéis arquiteturais e Dockerfiles do ecossistema.
-* **`capabilities/`**: Esquemas de capacidades declaradas por serviço (endpoints, eventos e regras de negócio).
-* **`specs/`**: Especificações de funcionalidades ativas e em evolução (`SPEC-001-...`).
+* **`capabilities/`**: Business Capabilities modeladas sob Domain-Driven Design (DDD) como Bounded Contexts perenes (`capability.yaml`), contendo Linguagem Ubíqua, Context Map e contratos de runtime. Uma capability governa múltiplas specs (1:N).
+* **`specs/`**: Especificações de funcionalidades incrementais (`SPEC-001-...`) vinculadas à sua Business Capability pai.
+* **`bin/capabilities`** / **`justfile`**: Ferramental canônico para auditar (`just audit-capabilities`) e sincronizar (`just sync-capabilities`) contratos de código com o catálogo DDD.
 * **`.spectral.yaml`**: Regras e padrões de governança para contratos OpenAPI 3.1.
-* **`AGENTS.md`**: Diretrizes completas para agentes de IA (fluxos Local e Cloud, TDD, regras de engenharia).
+* **`AGENTS.md`**: Diretrizes completas para agentes de IA (fluxos Local e Cloud, DDD, TDD, regras de engenharia).
 
 ---
 
