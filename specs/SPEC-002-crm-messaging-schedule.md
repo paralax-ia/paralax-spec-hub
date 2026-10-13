@@ -1,6 +1,8 @@
 # SPEC-002: Mensageria e Gestão de Expediente do CRM
 
-> **Status:** PROPOSED  
+> **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
+> **Bounded Context:** CRM (Supporting Subdomain)  
+> **Status:** MERGED  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-10-12  
 > **Repositórios Impactados:**  

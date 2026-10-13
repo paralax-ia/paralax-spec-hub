@@ -1,0 +1,30 @@
+version: "1.0"
+capability_id: "appointment-scheduling"
+name: "Agendamento de Consultas e Gestão de Calendários"
+subdomain_type: "core"
+description: >
+  Capacidade de descoberta de horários livres, agendamento de consultas médicas e gestão
+  de agendas integradas ao Google Workspace através de Domain-Wide Delegation (DWD).
+
+ubiquitous_language:
+  AppointmentSlot: "Intervalo temporal livre disponível para reserva na agenda médica."
+  CalendarEvent: "Evento formalizado contendo paciente, médico, especialidade e horário."
+  DomainWideDelegation: "Mecanismo de autorização de serviço para agir em nome dos usuários do Workspace."
+  CalendarDiscovery: "Descoberta dinâmica de agendas compartilhadas via calendarList.list()."
+
+context_map:
+  upstream_authoritative: "google-workspace-calendar"
+  sdk_layer: "google-calendar-agent"
+  downstream_consumers:
+    - "duo-dermato-support"
+
+specs: []
+
+runtime_contracts:
+  classes:
+    - name: "GoogleCalendarService"
+      methods:
+        - "list_calendars"
+        - "find_free_slots"
+        - "create_event"
+        - "cancel_event"
