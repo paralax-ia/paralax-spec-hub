@@ -4,7 +4,7 @@
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
 > **Scope:** Platform  
 > **Bounded Context:** IA Conversacional & Resiliência (Core Subdomain)  
-> **Status:** PROPOSED  
+> **Status:** MERGED  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-10-12  
 > **Repositórios Impactados:**  
