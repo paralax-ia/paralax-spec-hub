@@ -87,6 +87,11 @@ jobs:
             exit 0
           fi
 
+          if grep -qiE "^status:\s*(MERGED|ARCHIVED|CLOSED)" "$SPEC_FILE" 2>/dev/null; then
+            echo "Spec $SPEC_FILE possui status MERGED/ARCHIVED/CLOSED. Fan-out ignorado para specs já finalizadas."
+            exit 0
+          fi
+
           echo "spec_file=$SPEC_FILE" >> "$GITHUB_OUTPUT"
           echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
           echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
