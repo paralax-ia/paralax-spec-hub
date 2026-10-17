@@ -12,8 +12,10 @@ repositories:
   - "evolution-api"
   - "evo-bot-runtime"
   - "evo-ai-crm-community"
+  - "actions-workflows"
 
 capabilities:
   - "customer-relationship-management"
   - "omnichannel-messaging"
   - "conversational-ai-agent"
+  - "ci-cd-orchestration"
