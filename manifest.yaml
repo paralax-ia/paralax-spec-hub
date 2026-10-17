@@ -103,3 +103,13 @@ repositories:
     release_strategy: "semver"
     deploy_target: "production"
 
+  # Plataforma de CI/CD e Workflows Reutilizáveis
+  - name: "actions-workflows"
+    repo: "paralax-ia/actions-workflows"
+    role: "ci-cd-platform"
+    language: "yaml"
+    package_type: "reusable-workflows"
+    depends_on: []
+    release_strategy: "semver"
+    deploy_target: "production"
+
