@@ -2,6 +2,40 @@ version: "1.0"
 project: "paralax-ia"
 description: "Catálogo de repositórios oficiais e governança de especificações do ecossistema Paralax IA"
 
+# ── Declaração Declarativa de Nuvem e Observabilidade ─────────────────────────
+cloud_environments:
+  production:
+    provider: "gcp"
+    project_id: "paralax-prod"
+    project_number: "847291039482"
+    region: "us-central1"
+
+    execution_engine: "cloud-build"
+
+    kubernetes:
+      cluster_name: "prod-gke-cluster"
+      namespace: "prod"
+      sidecar_proxy:
+        container_name: "envoy-sidecar"
+        port: 5000
+
+    cloud_build:
+      service_account_email: "prod-cloudbuild-sa@paralax-prod.iam.gserviceaccount.com"
+      build_config: "cloudbuild/log-query.yaml"
+
+    wif:
+      pool_id: "github-pool-prod"
+      provider_id: "github-provider"
+      service_account_email: "prod-github-actions-sa@paralax-prod.iam.gserviceaccount.com"
+      issuer_uri: "https://token.actions.githubusercontent.com"
+
+    logging:
+      default_resource_type: "k8s_container"
+      severity_threshold: "ERROR"
+      trace_correlation_field: "jsonPayload.trace_id"
+      default_window: "2h"
+      max_entries: 50
+
 repositories:
   # Bibliotecas Compartilhadas (Camada Base)
   - name: "paralax-agents-common"
