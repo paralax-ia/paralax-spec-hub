@@ -37,6 +37,10 @@ specs:
   title: Mensageria e Gestão de Expediente do CRM
   status: MERGED
   spec_path: specs/SPEC-002-crm-messaging-schedule.md
+- id: SPEC-007
+  title: Transbordo para Celular do Atendente com Resumo Estruturado da Conversa
+  status: DRAFT
+  spec_path: specs/SPEC-007-notifica-celular-do-atendente.md
 runtime_contracts:
   classes:
   - name: CrmMessagePart
