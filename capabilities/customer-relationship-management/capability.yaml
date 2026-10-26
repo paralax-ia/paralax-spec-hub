@@ -4,11 +4,11 @@ name: Gestão de Relacionamento com Clientes e Contatos (CRM)
 subdomain_type: supporting
 scope: platform
 supported_products:
-  - paralax-platform
-  - customer-support-vehicles
-  - duo-dermato-support
-  - anero-cafe-support
-  - paralax-support
+- paralax-platform
+- customer-support-vehicles
+- duo-dermato-support
+- anero-cafe-support
+- paralax-support
 description: Capacidade corporativa responsável pela gestão de identidades de contatos,
   histórico de conversas, controle de expediente de atendimento e transbordo humano.
 ubiquitous_language:
@@ -41,33 +41,4 @@ specs:
   title: Transbordo para Celular do Atendente com Resumo Estruturado da Conversa
   status: DRAFT
   spec_path: specs/SPEC-007-notifica-celular-do-atendente.md
-runtime_contracts:
-  classes:
-  - name: CrmMessagePart
-    methods: []
-  - name: CrmMessage
-    methods:
-    - get_text
-  - name: CrmParams
-    methods: []
-  - name: CrmRequest
-    methods: []
-  - name: CrmResponseResult
-    methods: []
-  - name: CrmResponse
-    methods: []
-  - name: HealthStatus
-    methods: []
-  - name: CRMAPIError
-    methods: []
-  - name: CRMSendMessageError
-    methods: []
-  - name: CRMAPIClient
-    methods:
-    - send_message
-    - toggle_conversation_status
-    - get_conversation_sync
-    - get_inbox_sync
-    - get_schedule_summary
-    - check_out_of_office
-    - health_check
+runtime_contracts: {}

@@ -32,15 +32,8 @@ specs:
   status: MERGED
   spec_path: specs/SPEC-003-ai-response-orchestration.md
 - id: SPEC-006
-  title: Leitura de Anúncios em Plataformas Externas (Mercado Livre, OLX) e Busca no Estoque da Concessionária
+  title: Leitura de Anúncios em Plataformas Externas (Mercado Livre, OLX) e Busca
+    no Estoque da Concessionária
   status: DRAFT
   spec_path: specs/SPEC-006-informações-de-sites-externos.md
-runtime_contracts:
-  classes:
-  - name: PrivacyMaskingSpanProcessor
-    methods:
-    - on_start
-    - on_end
-  - name: CodeBlockReplacer
-    methods:
-    - save_code
+runtime_contracts: {}
