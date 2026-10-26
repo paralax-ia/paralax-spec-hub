@@ -3,3 +3,4 @@ node_modules/
 *.log
 .venv/
 gate_artifacts/
+.flywheel_src/
