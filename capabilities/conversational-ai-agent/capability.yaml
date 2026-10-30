@@ -32,7 +32,8 @@ specs:
   status: MERGED
   spec_path: specs/SPEC-003-ai-response-orchestration.md
 - id: SPEC-006
-  title: Leitura de Anúncios em Plataformas Externas (Mercado Livre, OLX) e Busca no Estoque da Concessionária
+  title: Leitura de Anúncios em Plataformas Externas (Mercado Livre, OLX) e Busca
+    no Estoque da Concessionária
   status: DRAFT
   spec_path: specs/SPEC-006-informações-de-sites-externos.md
 runtime_contracts:
@@ -44,3 +45,30 @@ runtime_contracts:
   - name: CodeBlockReplacer
     methods:
     - save_code
+  - name: Violation
+    methods: []
+  - name: AstSensor
+    methods:
+    - add_violation
+    - visit_function
+    - visit_FunctionDef
+    - visit_AsyncFunctionDef
+    - visit_ClassDef
+    - visit_Raise
+  - name: CICDViolation
+    methods:
+    - format_output
+  - name: CICDValidator
+    methods:
+    - find_target_files
+    - validate_file
+    - check_line_rules
+    - run
+  - name: RoutingResult
+    methods:
+    - to_dict
+  - name: Diagnostic
+    methods:
+    - key
+  - name: Comparison
+    methods: []

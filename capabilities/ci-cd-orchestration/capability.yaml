@@ -4,49 +4,94 @@ name: Orquestração de Entrega Contínua e Pipelines de CI/CD
 subdomain_type: generic
 scope: platform
 supported_products:
-  - paralax-platform
-  - customer-support-vehicles
-  - duo-dermato-support
-  - anero-cafe-support
-  - paralax-support
-description: >
-  Capacidade corporativa de orquestração de esteiras de integração contínua (CI),
-  automação de testes, build de contêineres, publicação de pacotes wheel privados e
-  entrega contínua (CD) em ambientes GCP/GKE via workflows reutilizáveis e Google Cloud Build
-  sob política estrita de fail-fast.
+- paralax-platform
+- customer-support-vehicles
+- duo-dermato-support
+- anero-cafe-support
+- paralax-support
+description: Capacidade corporativa de orquestração de esteiras de integração contínua
+  (CI), automação de testes, build de contêineres, publicação de pacotes wheel privados
+  e entrega contínua (CD) em ambientes GCP/GKE via workflows reutilizáveis e Google
+  Cloud Build sob política estrita de fail-fast.
 ubiquitous_language:
-  ReusableWorkflow: Workflow centralizado do GitHub Actions consumido via workflow_call por múltiplos repositórios.
-  FailFast: Política estrita onde qualquer falha ou erro encerra imediatamente a esteira, sendo proibido mascaramento silencioso sem justificativa formal.
-  WorkloadIdentityFederation: Mecanismo de autenticação federada (WIF) entre runners do GitHub e GCP sem chaves estáticas.
-  CloudBuildStep: Etapa isolada e reproduzível de compilação, teste ou publicação executada em runners do Cloud Build.
-  VendorWheels: Pacotes de distribuição binária compartilhados e injetados dinamicamente nos pipelines de agentes de IA.
-  GitOpsSync: Atualização declarativa automatizada de imagens e tags nos manifestos do repositório ArgoCD.
+  ReusableWorkflow: Workflow centralizado do GitHub Actions consumido via workflow_call
+    por múltiplos repositórios.
+  FailFast: Política estrita onde qualquer falha ou erro encerra imediatamente a esteira,
+    sendo proibido mascaramento silencioso sem justificativa formal.
+  WorkloadIdentityFederation: Mecanismo de autenticação federada (WIF) entre runners
+    do GitHub e GCP sem chaves estáticas.
+  CloudBuildStep: Etapa isolada e reproduzível de compilação, teste ou publicação
+    executada em runners do Cloud Build.
+  VendorWheels: Pacotes de distribuição binária compartilhados e injetados dinamicamente
+    nos pipelines de agentes de IA.
+  GitOpsSync: Atualização declarativa automatizada de imagens e tags nos manifestos
+    do repositório ArgoCD.
 context_map:
   upstream_authoritative: actions-workflows
   sdk_layer: actions-workflows
   downstream_consumers:
-    - paralax-agents-common
-    - paralax-evo-crm
-    - customer-support-vehicles
-    - duo-dermato-support
-    - google-calendar-agent
-    - paralax-support
-    - anero-cafe-support
-    - paralax-site
+  - paralax-agents-common
+  - paralax-evo-crm
+  - customer-support-vehicles
+  - duo-dermato-support
+  - google-calendar-agent
+  - paralax-support
+  - anero-cafe-support
+  - paralax-site
 specs: []
 runtime_contracts:
-  workflows:
-    - name: agent-deploy.yml
-      description: Build e deploy de contêineres de agentes de IA via Cloud Build com autenticação WIF.
-    - name: agent-dispatch.yml
-      description: Despacho assíncrono de tarefas para o hub agentic-flywheel com resolução de vendor-wheels.
-    - name: python-package-pipeline.yml
-      description: Pipeline de build, teste e publicação de pacotes Python no Artifact Registry e GitHub Releases.
-    - name: auto-package-release.yml
-      description: Bump de versão semântica e release automatizada em merges na branch main.
-    - name: gitops-update.yml
-      description: Atualização automatizada de imagens Kustomize no repositório de GitOps.
-    - name: evolution-api-deploy.yml
-      description: Build e deploy de imagens da Evolution API via Cloud Build.
-    - name: static-site-deploy.yml
-      description: Build e deploy de imagens estáticas do site institucional via Cloud Build.
+  classes:
+  - name: Violation
+    methods: []
+  - name: AstSensor
+    methods:
+    - add_violation
+    - visit_function
+    - visit_FunctionDef
+    - visit_AsyncFunctionDef
+    - visit_ClassDef
+    - visit_Raise
+  - name: CICDViolation
+    methods:
+    - format_output
+  - name: CICDValidator
+    methods:
+    - find_target_files
+    - validate_file
+    - check_line_rules
+    - run
+  - name: RoutingResult
+    methods:
+    - to_dict
+  - name: Diagnostic
+    methods:
+    - key
+  - name: Comparison
+    methods: []
+  - name: Violation
+    methods: []
+  - name: AstSensor
+    methods:
+    - add_violation
+    - visit_function
+    - visit_FunctionDef
+    - visit_AsyncFunctionDef
+    - visit_ClassDef
+    - visit_Raise
+  - name: CICDViolation
+    methods:
+    - format_output
+  - name: CICDValidator
+    methods:
+    - find_target_files
+    - validate_file
+    - check_line_rules
+    - run
+  - name: RoutingResult
+    methods:
+    - to_dict
+  - name: Diagnostic
+    methods:
+    - key
+  - name: Comparison
+    methods: []

@@ -1,29 +1,30 @@
 ---
 spec_id: SPEC-008
-title: "Fleet Remediation: compatibilização de todos os agentes com paralax-evo-crm 0.2.4"
+title: 'Fleet Remediation: compatibilização de todos os agentes com paralax-evo-crm
+  0.2.4'
 product:
-  - paralax-platform
+- paralax-platform
 capability: customer-relationship-management
 scope: platform
-bounded_context: "CRM (Supporting Subdomain)"
+bounded_context: CRM (Supporting Subdomain)
 origin_module: paralax-evo-crm
 target_repositories:
-  - repo: paralax-ia/paralax-evo-crm
-    wave: 1
-    role: sdk
-  - repo: paralax-ia/customer-support-vehicles
-    wave: 2
-    role: ai-agent
-  - repo: paralax-ia/anero-cafe-support
-    wave: 2
-    role: ai-agent
-  - repo: paralax-ia/duo-dermato-support
-    wave: 2
-    role: ai-agent
-  - repo: paralax-ia/paralax-support
-    wave: 2
-    role: ai-agent
-status: IN_PROGRESS
+- repo: paralax-ia/paralax-evo-crm
+  wave: 1
+  role: sdk
+- repo: paralax-ia/customer-support-vehicles
+  wave: 2
+  role: ai-agent
+- repo: paralax-ia/anero-cafe-support
+  wave: 2
+  role: ai-agent
+- repo: paralax-ia/duo-dermato-support
+  wave: 2
+  role: ai-agent
+- repo: paralax-ia/paralax-support
+  wave: 2
+  role: ai-agent
+status: MERGED
 ---
 
 # SPEC-008: Fleet Remediation — compatibilização de todos os agentes com `paralax-evo-crm` 0.2.4
