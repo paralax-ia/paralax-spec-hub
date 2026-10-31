@@ -23,7 +23,7 @@ Repositório Central de Governança de Especificações (Spec-Driven Development
 
 > **Hierarquia DDD:** `Product` ➔ `Business Capability` (Bounded Context) ➔ `Spec` (`SPEC-XXX`) ➔ `Runtime Contracts`.
 
-> **Nota Arquitetural:** O spec hub é um repositório **estritamente declarativo** (dados, contratos e especificações). As ferramentas de auditoria, sincronização e planejamento de capacidades residem centralmente no motor [`agentic-flywheel`](https://github.com/eduardosan/agentic-flywheel) e na CLI [`harness-state`](https://github.com/eduardosan/harness-state).
+> **Nota Arquitetural:** O spec hub é um repositório **estritamente declarativo** (dados, contratos e especificações). As ferramentas de auditoria, sincronização e planejamento de capacidades residem centralmente no motor [`agentic-flywheel`](https://github.com/eduardosan/agentic-flywheel) e na CLI unificada [`harness`](https://github.com/eduardosan/agentic-flywheel).
 
 ---
 

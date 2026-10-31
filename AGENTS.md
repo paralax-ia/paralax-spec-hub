@@ -57,10 +57,10 @@ A plataforma organiza o ecossistema segundo os princípios de **Domain-Driven De
    > **Bounded Context:** CRM (Supporting Subdomain)
    ```
 4. **Auditoria e Sincronização Contínua de Contratos (Ferramentas Centrais):**
-   O spec hub não contém código executável. As operações de domínio são executadas através do motor central `agentic-flywheel` (ou CLI `harness-state`):
-   - **Mapear Todo o Ecossistema:** `flywheel map-all --spec-hub-dir .` (inventaria Produtos ➔ Capacidades ➔ Contratos de Runtime).
-   - **Auditar Cobertura de Domínio:** `flywheel audit --spec-hub-dir .` (cruza a Linguagem Ubíqua com o código real).
-   - **Sincronizar Contratos de Código:** `flywheel sync --spec-hub-dir .` (atualiza os `runtime_contracts` no `capability.yaml`).
+   O spec hub não contém código executável. As operações de domínio são executadas através do motor central `agentic-flywheel` (ou CLI `harness`):
+   - **Mapear Todo o Ecossistema:** `harness map-all --spec-hub-dir .` (inventaria Produtos ➔ Capacidades ➔ Contratos de Runtime).
+   - **Auditar Cobertura de Domínio:** `harness audit --spec-hub-dir .` (cruza a Linguagem Ubíqua com o código real).
+   - **Sincronizar Contratos de Código:** o sync dos `runtime_contracts` no `capability.yaml` é executado automaticamente pelo fechamento do ciclo (`harness spec finish`, `harness bug finish`) e pelo Cross-Repo Gate.
    - **Fechamento Transacional:** O Cross-Repo Gate (`gate.py`) no hub atualiza automaticamente o status da spec para `MERGED` na capability ao aprovar o gate com Score 100/100.
 
 ---
@@ -150,7 +150,7 @@ ssh -p 8 -N -L 6379:192.168.20.5:6379 eduardo@pve2.for.mat.br
 #### Passo 2: Planejar Ondas e Criar Issues de Rastreamento
 Execute o planejador no repositório `paralax-spec-hub`:
 ```bash
-harness-state plan --manifest manifest.yaml --spec specs/SPEC-XXX.md
+harness spec plan specs/SPEC-XXX.md --manifest manifest.yaml
 ```
 - O planejador registra as tarefas no Redis ordenadas por onda causal.
 - Cria issues de rastreamento nos repositórios spoke com o link da spec central.
@@ -177,7 +177,7 @@ harness-state plan --manifest manifest.yaml --spec specs/SPEC-XXX.md
    ```
 6. Notifique o State Tracker da conclusão da Onda 1:
    ```bash
-   harness-state update --spec SPEC-XXX --repo paralax-evo-crm --status READY --pr <URL_DO_PR>
+   harness update SPEC-XXX task-1 READY --worker local-dev --pr <NUMERO_DO_PR>
    ```
 7. Acione a publicação do novo pacote (ex: via workflow do Cloud Build ou release SemVer) para disponibilizar a versão atualizada no Google Cloud Artifact Registry.
 
@@ -204,7 +204,7 @@ harness-state plan --manifest manifest.yaml --spec specs/SPEC-XXX.md
    ```
 7. Notifique o State Tracker:
    ```bash
-   harness-state update --spec SPEC-XXX --repo customer-support-vehicles --status READY --pr <URL_DO_PR>
+   harness update SPEC-XXX task-2 READY --worker local-dev --pr <NUMERO_DO_PR>
    ```
 
 #### Passo 5: Validação no Cross-Repo Gate e Fechamento
