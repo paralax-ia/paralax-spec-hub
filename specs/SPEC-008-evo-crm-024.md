@@ -24,7 +24,7 @@ target_repositories:
 - repo: paralax-ia/paralax-support
   wave: 2
   role: ai-agent
-status: IN_PROGRESS
+status: MERGED
 ---
 
 # SPEC-008: Fleet Remediation — compatibilização de todos os agentes com `paralax-evo-crm` 0.2.4
@@ -33,7 +33,7 @@ status: IN_PROGRESS
 > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)
 > **Scope:** Platform
 > **Bounded Context:** CRM (Supporting Subdomain)
-> **Status:** IN_PROGRESS
+> **Status:** MERGED
 > **Autor:** Eduardo F. Santos
 > **Data de Criação:** 2026-10-30
 > **Repositórios Impactados:**
@@ -75,11 +75,11 @@ O agente de veículos (`customer-support-vehicles`) entrou em looping infinito r
 ### Onda 1 (Base/SDK) — CONCLUÍDA E FROZEN
 - [x] `paralax-ia/paralax-evo-crm`: fix da causa raiz em `run_agent_once` (`try/finally` garantindo `stop_event.set()` + cancelamento da task do heartbeat em conclusão normal, timeout e falha irrecuperável do provedor de modelo, sem mascarar a exceção real), teste de regressão `tests/paralax/evo/crm/test_generator.py::test_run_agent_once_stops_heartbeat_after_unrecoverable_model_error`, bump para `0.2.4` e publicação da wheel no `prod-python-registry`. **Entrega:** [`paralax-evo-crm#21`](https://github.com/paralax-ia/paralax-evo-crm/pull/21).
 
-### Onda 2 (Agentes/Consumidores)
+### Onda 2 (Agentes/Consumidores) — CONCLUÍDA
 - [x] **(FROZEN — não regredir)** `paralax-ia/customer-support-vehicles`: teste de repro fail-first `tests/unit/test_bug_repro.py::test_reproduce_reported_bug` + bump `paralax-evo-crm>=0.2.4` em `pyproject.toml`/`uv.lock`. **Entrega:** [`customer-support-vehicles#56`](https://github.com/paralax-ia/customer-support-vehicles/pull/56).
-- [ ] `paralax-ia/anero-cafe-support`: atualizar `pyproject.toml` para `paralax-evo-crm>=0.2.4`, replicar teste de repro e validar `just verify`. **Contrato do Repro:** `tests/unit/test_bug_repro.py::test_reproduce_reported_bug` sobre `anero_cafe/routers/crm.py` (webhook `/crm/run` coordenando `paralax.evo.crm.generator.generate_crm_response` e `paralax.evo.crm.client.send_message`).
-- [ ] `paralax-ia/duo-dermato-support`: **remover o pin rígido `==0.0.14`** e substituir por `paralax-evo-crm>=0.2.4`, replicar teste de repro e validar `just verify`. **Contrato do Repro:** `tests/unit/test_bug_repro.py::test_reproduce_reported_bug` sobre `duo_dermato/routers/crm.py` (webhook `/crm/run` coordenando `generate_crm_response`/`send_message`).
-- [ ] `paralax-ia/paralax-support`: bump de `>=0.2.0` para `>=0.2.4`, replicar teste de repro e validar `just verify`. **Contrato do Repro:** `tests/unit/test_bug_repro.py::test_reproduce_reported_bug` sobre `support/routers/crm.py`.
+- [x] `paralax-ia/anero-cafe-support`: atualizar `pyproject.toml` para `paralax-evo-crm>=0.2.4`, teste de repro e `just verify` 100%. **Entrega:** [`anero-cafe-support#12`](https://github.com/paralax-ia/anero-cafe-support/pull/12).
+- [x] `paralax-ia/duo-dermato-support`: remoção do pin rígido `==0.0.14` e bump para `paralax-evo-crm>=0.2.4`, teste de repro e `just verify` 100%. **Entrega:** [`duo-dermato-support#12`](https://github.com/paralax-ia/duo-dermato-support/pull/12).
+- [x] `paralax-ia/paralax-support`: bump de `>=0.2.0` para `>=0.2.4`, teste de repro e `just verify` 100%. **Entrega:** [`paralax-support#23`](https://github.com/paralax-ia/paralax-support/pull/23).
 
 ### Fora de Escopo (justificativa)
 - `paralax-ia/google-calendar-agent`: não depende do `paralax-evo-crm` (apenas `paralax-agents-common`); não invoca `generate_crm_response`.
