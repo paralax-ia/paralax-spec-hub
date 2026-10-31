@@ -15,7 +15,7 @@ target_repositories:
   - repo: paralax-ia/customer-support-vehicles
     wave: 2
     role: ai-agent
-status: DRAFT
+status: APPROVED
 ---
 
 # SPEC-009: Suporte a Instruções de Áudio no Agente de Veículos via Modelo Gemini Live
