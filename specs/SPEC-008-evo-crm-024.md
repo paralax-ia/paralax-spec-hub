@@ -24,7 +24,7 @@ target_repositories:
 - repo: paralax-ia/paralax-support
   wave: 2
   role: ai-agent
-status: MERGED
+status: IN_PROGRESS
 ---
 
 # SPEC-008: Fleet Remediation — compatibilização de todos os agentes com `paralax-evo-crm` 0.2.4
