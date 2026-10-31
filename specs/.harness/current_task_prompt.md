@@ -4,13 +4,13 @@ You are the Software Architect responsible for the ecosystem.
 The human operator requested a refinement/change in the technical specification below during the Approval Gateway.
 
 ## Target Specification File:
-`/mnt/home/eduardo/srv/paralax-ia/paralax-spec-hub/specs/SPEC-008-evo-crm-024.md`
+`/mnt/home/eduardo/srv/paralax-ia/paralax-spec-hub/specs/SPEC-009-suporte-audio.md`
 
 ## Current Specification Content:
 ```markdown
 ---
-spec_id: SPEC-008
-title: "evo crm 0.2.4"
+spec_id: SPEC-009
+title: "Suporte audio"
 product:
   - paralax-platform
 capability: customer-relationship-management
@@ -24,7 +24,7 @@ target_repositories:
 status: DRAFT
 ---
 
-# SPEC-008: evo crm 0.2.4
+# SPEC-009: Suporte audio
 
 > **Product:** `paralax-platform`  
 > **Business Capability:** `customer-relationship-management`  
@@ -58,11 +58,11 @@ Estratégia de versionamento SemVer e publicação.
   - [task-1] Wave 1 in `paralax-ia/paralax-common` (Status: PENDING)
 
 ## Operator Requested Change Instruction:
-É preciso compatibilizar todos os agentes com a versão 0.2.4 do evo-crm. O bug corrigido no agente de veículos também precisa ser corrigido em todos os agentes
+O agente de veículos precisa suportar instruções em audio oriundas dos usuários. Para audio sempre usar o modelo live do gemini
 
 ## Mandatory Refinement Rules:
 1. PRESERVE COMPLETED WORK: It is strictly forbidden to regress, remove, or modify the scope, public interface contracts, or acceptance criteria of already completed tasks (none).
-2. UPDATE THE FILE DIRECTLY ON DISK: Rewrite/edit the file `SPEC-008-evo-crm-024.md` incorporating the requested changes:
+2. UPDATE THE FILE DIRECTLY ON DISK: Rewrite/edit the file `SPEC-009-suporte-audio.md` incorporating the requested changes:
    - Add or update Interface Contracts and Acceptance Criteria (Gherkin) for pending tasks or new waves.
    - Update the Context and Motivation section reflecting recent decisions.
    - Adjust YAML Frontmatter (`target_repositories`) if new subtasks or modules are added for upcoming waves.
