@@ -36,4 +36,8 @@ specs:
     no Estoque da Concessionária
   status: DRAFT
   spec_path: specs/SPEC-006-informações-de-sites-externos.md
+- id: SPEC-009
+  title: Suporte a Instruções de Áudio no Agente de Veículos via Modelo Gemini Live
+  status: APPROVED
+  spec_path: specs/SPEC-009-suporte-audio.md
 runtime_contracts: {}
