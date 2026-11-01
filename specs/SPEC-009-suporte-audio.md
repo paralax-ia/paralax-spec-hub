@@ -15,6 +15,8 @@ target_repositories:
   - repo: paralax-ia/customer-support-vehicles
     wave: 2
     role: ai-agent
+prompts:
+  - "vehicles/vehicle_search_agent_instruction"
 status: APPROVED
 ---
 
@@ -48,12 +50,12 @@ No atendimento digital da concessionária e revenda de veículos **Brasília Aut
    Atualmente, o roteador do webhook do CRM (`vehicles/routers/crm.py`) processa estritamente partes de texto (`if part.type == "text" and part.text:`), descartando ou ignorando partes do tipo `audio`. Isso impede a compreensão da solicitação do cliente que envia áudio, deixando o usuário sem resposta ou exigindo intervenção manual desnecessária.
 2. **Regra de Negócio Mandatória: Uso Obrigatório do Modelo Gemini Live para Áudio:**
    A diretriz oficial da arquitetura exige que: **"Para áudio sempre usar o modelo live do gemini"**.
-   - A família de modelos **Gemini Live** (como `gemini-2.0-flash-exp` / `gemini-2.0-flash-realtime-exp` / `gemini-2.0-flash`) foi construída com capacidades nativas de compreensão multimodal de áudio/voz de baixíssima latência e alta precisão acústica.
+   - A família de modelos **Gemini Live** (liderada pelo modelo oficial de produção **`gemini-3.8-live`** e seu companheiro de raciocínio estendido **`gemini-3.8-live-extended-thinking`**, com fallback multimodal para `gemini-2.0-flash`) foi construída com capacidades nativas de compreensão multimodal de áudio/voz de baixíssima latência e alta precisão acústica.
    - O processamento de áudio com Gemini Live opera de ponta a ponta ingerindo o áudio bruto (`Part.from_bytes` com mime-types como `audio/ogg; codecs=opus`, `audio/mp4`, `audio/wav`, `audio/mpeg`), eliminando a necessidade de pipelines intermediários frágeis de transcrição Speech-to-Text (STT) desacoplados.
-   - Sempre que uma mensagem recebida contiver instrução em áudio, o agente deve obrigatoriamente rotear a inferência para o modelo Gemini Live configurado.
+   - Sempre que uma mensagem recebida contiver instrução em áudio, o agente deve obrigatoriamente rotear a inferência para o modelo Gemini Live configurado (`gemini-3.8-live`).
    - Para mensagens puramente textuais, o agente preserva o uso dos modelos textuais padrão (`gemini-3.8-flash` / fallbacks).
 3. **Resiliência e Fallback Transversal:**
-   Em caso de instabilidade temporária (erros 429 ou 503) no modelo Live principal, o gerador de respostas deve efetuar fallback automático para modelos Live secundários (ex: `gemini-2.0-flash-exp` ➔ `gemini-2.0-flash`), sem lançar exceção 500 para o CRM.
+   Em caso de instabilidade temporária (erros 429 ou 503) no modelo Live principal (`gemini-3.8-live`), o gerador de respostas deve efetuar fallback automático para modelos Live secundários e de contingência (`gemini-3.8-live-extended-thinking` ➔ `gemini-2.0-flash`), sem lançar exceção 500 para o CRM.
 
 ### Diretrizes de Engenharia e Arquitetura
 - **Prompts Estritamente em Inglês (English-Only Prompts):** Todas as instruções de sistema da agente em `vehicles/prompts.py` e eventuais templates de prompt para o LLM devem ser redigidos exclusivamente em inglês, assegurando precisão, consistência e conformidade estrita aos padrões corporativos.
@@ -112,10 +114,10 @@ No atendimento digital da concessionária e revenda de veículos **Brasília Aut
 - [ ] **[Onda 2] `paralax-ia/customer-support-vehicles` (`task-2`):**
   - Atualizar a dependência `paralax-evo-crm` no projeto.
   - Atualizar `vehicles/config.py`:
-    - Adicionar os identificadores do Gemini Live à lista `SUPPORTED_GLOBAL_MODELS` (ex: `"gemini-2.0-flash-exp"`, `"gemini-2.0-flash"`, `"gemini-2.0-flash-realtime-exp"`).
+    - Adicionar os identificadores do Gemini Live à lista `SUPPORTED_GLOBAL_MODELS` (ex: `"gemini-3.8-live"`, `"gemini-3.8-live-extended-thinking"`, `"gemini-2.0-flash"`).
     - Adicionar as configurações 12-Factor em `AgentModel` / `Config`:
-      - `LIVE_AUDIO_MODEL: str = Field(default="gemini-2.0-flash-exp", validation_alias="LIVE_AUDIO_MODEL")`
-      - `LIVE_AUDIO_FALLBACK_MODELS: list[str] = Field(default=["gemini-2.0-flash-exp", "gemini-2.0-flash"], validation_alias="LIVE_AUDIO_FALLBACK_MODELS")`
+      - `LIVE_AUDIO_MODEL: str = Field(default="gemini-3.8-live", validation_alias="LIVE_AUDIO_MODEL")`
+      - `LIVE_AUDIO_FALLBACK_MODELS: list[str] = Field(default=["gemini-3.8-live-extended-thinking", "gemini-2.0-flash"], validation_alias="LIVE_AUDIO_FALLBACK_MODELS")`
   - Atualizar `vehicles/routers/crm.py`:
     - Na rota POST `/run`, processar `request.params.message` utilizando `build_genai_content_from_crm_message`.
     - Se `has_audio` for True:
@@ -254,14 +256,14 @@ Configurações geradas dinamicamente exclusivamente a partir de variáveis de a
 
 ```python
 SUPPORTED_GLOBAL_MODELS: list[str] = [
+    "gemini-3.8-live",
+    "gemini-3.8-live-extended-thinking",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash-exp",
     "gemini-2.0-flash",
-    "gemini-2.0-flash-realtime-exp",
 ]
 
 
@@ -274,12 +276,12 @@ class AgentModel(BaseModel):
         default=["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"]
     )
     live_audio_model: str = Field(
-        default="gemini-2.0-flash-exp",
-        description="Modelo Gemini Live obrigatório para processamento de áudio.",
+        default="gemini-3.8-live",
+        description="Modelo Gemini Live oficial para processamento de áudio.",
     )
     live_audio_fallback_models: list[str] = Field(
-        default=["gemini-2.0-flash-exp", "gemini-2.0-flash"],
-        description="Modelos Gemini Live reservas para contingência de áudio.",
+        default=["gemini-3.8-live-extended-thinking", "gemini-2.0-flash"],
+        description="Modelos Gemini Live de contingência e fallback de áudio.",
     )
     enable_heartbeat: bool = Field(default=True)
 ```
@@ -355,7 +357,7 @@ When processing an audio message:
 - **E** o payload do CRM webhook contém uma parte de áudio com `type="audio"` e `data` em base64 (MIME `audio/ogg; codecs=opus`)
 - **Quando** o endpoint `/run` processar a requisição
 - **Então** o áudio deve ser convertido em `Part.from_bytes` e a flag `has_audio` deve ser avaliada como `True`
-- **E** a execução deve selecionar obrigatoriamente o modelo Gemini Live configurado (`LIVE_AUDIO_MODEL="gemini-2.0-flash-exp"`)
+- **E** a execução deve selecionar obrigatoriamente o modelo Gemini Live configurado (`LIVE_AUDIO_MODEL="gemini-3.8-live"`)
 - **E** a resposta final deve conter as informações de estoque formatadas para WhatsApp sem erros 500.
 
 ### Cenário 2: Mensagem Mista de Áudio e Texto Roteada para o Modelo Gemini Live
@@ -373,7 +375,7 @@ When processing an audio message:
 ### Cenário 4: Fallback Transparente em Caso de Indisponibilidade Transitória do Modelo Live
 - **Dado** que uma requisição com áudio seja recebida e o modelo Gemini Live principal retorne erro de cota ou indisponibilidade (HTTP 429 ou 503)
 - **Quando** o gerador de resposta `generate_crm_response` capturar o erro
-- **Então** o sistema deve acionar automaticamente o modelo Live secundário definido em `LIVE_AUDIO_FALLBACK_MODELS` (ex: `gemini-2.0-flash`)
+- **Então** o sistema deve acionar automaticamente o modelo Live secundário definido em `LIVE_AUDIO_FALLBACK_MODELS` (ex: `gemini-3.8-live-extended-thinking` / `gemini-2.0-flash`)
 - **E** responder ao cliente de forma transparente sem falha irrecuperável.
 
 ### Cenário 5: Resiliência contra Áudio Corrompido ou Falha de Download
