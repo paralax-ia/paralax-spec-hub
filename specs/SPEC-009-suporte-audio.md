@@ -16,7 +16,11 @@ target_repositories:
     wave: 2
     role: ai-agent
 prompts:
-  - "vehicles/vehicle_search_agent_instruction"
+  - name: "vehicles/vehicle_search_agent_instruction"
+    target_repo: "paralax-ia/customer-support-vehicles"
+    file: "vehicles/prompts.py"
+    symbol: "INSTRUCTION"
+    description: "System instructions for vehicle search agent Isa, supporting WhatsApp audio notes and multimodal customer inquiries."
 status: APPROVED
 ---
 
@@ -333,9 +337,19 @@ async def run_crm(request: CrmRequest):
 
 ---
 
-### 3.5. Instruções da Agente Isa em Inglês (`vehicles/prompts.py`)
+### 3.5. Governança de Prompts e Instruções da Agente Isa em Inglês (`vehicles/prompts.py`)
 
-Seção adicionada em `vehicles/prompts.py`, estritamente em inglês:
+Em conformidade com a política de governança de prompts (**SPEC-PROMPT-01**) e integração contínua com o Langfuse:
+
+- **Identificador Canônico (SSOT Langfuse):** `vehicles/vehicle_search_agent_instruction`
+- **Repositório Alvo:** `paralax-ia/customer-support-vehicles`
+- **Arquivo de Fallback:** `vehicles/prompts.py`
+- **Símbolo / Constante Exportada:** `INSTRUCTION`
+- **Ciclo de Governança:** O prompt é versionado e gerenciado centralmente no Langfuse. Durante a execução local do `harness spec run`, o prompt é sincronizado como `draft` e, após a aprovação e merge da branch no repositório de produção, é promovido para a label `production`.
+
+#### Fragmento Multimodal de Áudio Adicionado ao Prompt do Sistema
+
+Fragmento adicionado em `vehicles/prompts.py`, estritamente em inglês:
 
 ```markdown
 <audio_and_voice_instructions>
