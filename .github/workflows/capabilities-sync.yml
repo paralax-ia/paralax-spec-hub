@@ -34,7 +34,7 @@ jobs:
 
       - name: Instalar Dependências
         run: |
-          pip install pyyaml pydantic
+          pip install pyyaml pydantic redis rich click
 
       - name: Executar Auditoria e Sincronização via Agentic Flywheel
         env:
