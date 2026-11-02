@@ -41,12 +41,12 @@ prompts:
     file: anero_cafe/prompts.py
     symbol: INSTRUCTION
     description: "System instructions for Anero Cafe agent, supporting customer voice inquiries when audio feature flag is enabled."
-  - name: duo_dermato/instruction
+  - name: duo_dermato/support
     target_repo: paralax-ia/duo-dermato-support
     file: duo_dermato/prompts.py
     symbol: INSTRUCTION
     description: "System instructions for Duo Dermato clinic agent, supporting patient audio messages when audio feature flag is enabled."
-  - name: support/instruction
+  - name: paralax/support
     target_repo: paralax-ia/paralax-support
     file: support/prompts.py
     symbol: INSTRUCTION
@@ -456,7 +456,7 @@ When receiving audio inquiries from coffee lovers or store customers:
 ```
 
 #### 3. Clínica Dermatológica (`duo-dermato-support`)
-- **Identificador Canônico (SSOT Langfuse):** `duo_dermato/instruction`
+- **Identificador Canônico (SSOT Langfuse):** `duo_dermato/support`
 - **Repositório:** `paralax-ia/duo-dermato-support`
 - **Arquivo Local / Fallback:** `duo_dermato/prompts.py` (constante `INSTRUCTION`)
 - **Papel:** Instrução de sistema da recepcionista virtual da Clínica Duo Dermato
@@ -472,7 +472,7 @@ When patients send voice notes regarding dermatological appointments, procedures
 ```
 
 #### 4. Suporte Corporativo (`paralax-support`)
-- **Identificador Canônico (SSOT Langfuse):** `support/instruction`
+- **Identificador Canônico (SSOT Langfuse):** `paralax/support`
 - **Repositório:** `paralax-ia/paralax-support`
 - **Arquivo Local / Fallback:** `support/prompts.py` (constante `INSTRUCTION`)
 - **Papel:** Instrução de sistema do agente de suporte técnico e helpdesk da Paralax
