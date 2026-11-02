@@ -27,6 +27,9 @@ target_repositories:
   - repo: paralax-ia/paralax-support
     wave: 2
     role: ai-agent
+  - repo: paralax-ia/argocd
+    wave: 3
+    role: gitops
 prompts:
   - name: vehicles/vehicle_search_agent_instruction
     target_repo: paralax-ia/customer-support-vehicles
@@ -60,10 +63,10 @@ status: DRAFT
 > **Status:** DRAFT  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-11-02  
-> **Decisão Arquitetural Crítica:** O modelo Gemini Live NÃO é compatível com webhooks de CRM; a inferência de áudio no CRM utiliza obrigatoriamente modelos Gemini Multimodais nativos turn-by-turn (`gemini-3.8-flash` e sua hierarquia de fallback)  
-> **Arquitetura 12-Factor:** Zero arquivos de configuração no Git; toda parametrização gerada exclusivamente via variáveis de ambiente  
+> **Decisão Arquitetural Crítica 1:** O modelo Gemini Live NÃO é compatível com webhooks de CRM; a inferência de áudio no CRM utiliza obrigatoriamente modelos Gemini Multimodais nativos turn-by-turn (`gemini-3.8-flash` e sua hierarquia de fallback)  
+> **Decisão Arquitetural Crítica 2 (GitOps ArgoCD):** A ativação em produção é controlada explicitamente via manifests do ArgoCD. Nesta fase inicial, **apenas `customer-support-vehicles` e `paralax-support` terão a feature flag ativada (`ENABLE_AUDIO_SUPPORT="true"`)**, enquanto `anero-cafe-support` e `duo-dermato-support` permanecem explicitamente desativados (`ENABLE_AUDIO_SUPPORT="false"`)  
+> **Arquitetura 12-Factor:** Zero arquivos de configuração no Git dos microsserviços; toda parametrização gerada exclusivamente via variáveis de ambiente declaradas nos manifests K8s/Kustomize do repositório GitOps  
 > **Diretriz de Prompts (SPEC-PROMPT-01):** Prompts de sistema e instruções LLM estritamente redigidos em inglês  
-> **Governança de Feature Flag:** Ativação granular de áudio por agente via `ENABLE_AUDIO_SUPPORT` (booleano, default `False`)  
 
 ---
 
@@ -71,9 +74,9 @@ status: DRAFT
 
 Nos canais de atendimento digital operados pela Paralax IA (WhatsApp via Evolution CRM e mensageria omnicanal), uma parcela expressiva das interações dos usuários finais ocorre via notas de voz (áudios). Essa demanda manifesta-se nos diversos domínios de negócio da plataforma:
 1. **Concessionária Brasília Automóveis (`customer-support-vehicles`):** Clientes enviando áudios sobre marcas, modelos, orçamentos, fotos e avaliação de seminovos.
-2. **Cafeteria Gourmet Anero Café (`anero-cafe-support`):** Clientes solicitando cardápio, grãos especiais, métodos de extração, encomendas e reservas por áudio.
-3. **Clínica Dermatológica Duo Dermato (`duo-dermato-support`):** Pacientes detalhando sintomas, tratamentos e agendamentos de consultas via mensagens de voz.
-4. **Suporte Corporativo Paralax (`paralax-support`):** Colaboradores e clientes descrevendo incidentes, dúvidas e suporte técnico por voz.
+2. **Suporte Corporativo Paralax (`paralax-support`):** Colaboradores e clientes descrevendo incidentes, dúvidas e suporte técnico por voz.
+3. **Cafeteria Gourmet Anero Café (`anero-cafe-support`):** Clientes solicitando cardápio, grãos especiais, métodos de extração, encomendas e reservas por áudio.
+4. **Clínica Dermatológica Duo Dermato (`duo-dermato-support`):** Pacientes detalhando sintomas, tratamentos e agendamentos de consultas via mensagens de voz.
 
 ---
 
@@ -88,7 +91,7 @@ Durante os testes de integração e validação operacional no Gateway de Aprova
      - O CRM armazena a mídia e despacha uma requisição HTTP `POST /run` para o webhook do agente com o arquivo de áudio (em bytes base64 ou link de mídia).
      - O agente processa a requisição completa, executa chamadas a ferramentas de negócio (bancos de dados, estoques, calendários) e responde através de uma chamada REST à API do CRM (`crm_api.send_message`).
      - A conexão HTTP fecha imediatamente após a resposta.
-   - Forçar uma conexão WebSocket Gemini Live dentro de um webhook HTTP turn-by-turn introduz complexidade excessiva, fragilidade no ciclo de vida de sockets, falhas em ambientes serverless (Cloud Run) e custos desnecessários de streaming ativo para mensagens assíncronas estáticas.
+   - Forçar uma conexão WebSocket Gemini Live dentro de um webhook HTTP turn-by-turn introduz complexidade excessiva, fragilidade no ciclo de vida de sockets, falhas em ambientes serverless/Kubernetes e custos desnecessários de streaming ativo para mensagens assíncronas estáticas.
 
 2. **Incompatibilidade com o Runner do Google ADK e Chamadas a Ferramentas (Tool Calling):**
    - No runner oficial do Google ADK (`google-adk`), a orquestração conversacional de agentes utiliza o método padrão turn-by-turn `runner.run_async(session_id=..., content=...)` sobre a API Vertex AI `generateContent`.
@@ -104,8 +107,8 @@ Durante os testes de integração e validação operacional no Gateway de Aprova
 
 O suporte a áudio envolve custos computacionais e considerações contratuais por cliente e por canal. Nem todos os clientes ou canais de mensageria têm contrato ou perfil para processamento de voz.
 
-Por isso, o suporte a áudio deve ser governado por uma **Feature Flag 12-Factor (`ENABLE_AUDIO_SUPPORT`)**, aplicável universalmente a todos os agentes:
-- **Quando a Feature Flag está Desativada (`ENABLE_AUDIO_SUPPORT=False`, Padrão):**
+Por isso, o suporte a áudio deve ser governado por uma **Feature Flag 12-Factor (`ENABLE_AUDIO_SUPPORT`)**, aplicável universalmente no código de todos os agentes:
+- **Quando a Feature Flag está Desativada (`ENABLE_AUDIO_SUPPORT=False`, Padrão no Código):**
   - O agente **não deve** tentar submeter o áudio para o LLM (evitando custos e consumo desnecessário de cota).
   - O agente **não deve** retornar erro HTTP 500 nem descartar silenciosamente a mensagem do usuário.
   - O agente deve responder de forma cortês e imediata ao cliente no WhatsApp/CRM, notificando que o atendimento naquele canal é realizado por texto (ex: *"Desculpe, o atendimento por mensagens de voz está temporariamente desativado neste canal. Por favor, envie sua mensagem por texto para que eu possa te ajudar!"*).
@@ -114,6 +117,20 @@ Por isso, o suporte a áudio deve ser governado por uma **Feature Flag 12-Factor
   - O payload é convertido para GenAI `Content` multimodal via `Part.from_bytes(data=..., mime_type=...)`.
   - O roteamento dinâmico seleciona o modelo multimodal homologado de áudio (`gemini-3.8-flash`) com cascata de fallback (`gemini-3.7-flash` ➔ `gemini-2.5-flash`).
   - Mensagens puramente textuais continuam utilizando os modelos textuais padrão.
+
+---
+
+### 1.3. Governança GitOps e Estratégia de Ativação Gradual no ArgoCD
+
+O código de todos os 4 agentes torna-se capaz de processar áudio através da feature flag, mas a **ativação operacional em produção é governada de forma estrita e centralizada pelo repositório GitOps (`paralax-ia/argocd`)**:
+
+- **Fase Inicial (Canary Restrito):**
+  - **`customer-support-v2-vehicles`:** `ENABLE_AUDIO_SUPPORT="true"` (habilitado para clientes de concessionária).
+  - **`paralax-support`:** `ENABLE_AUDIO_SUPPORT="true"` (habilitado para chamados de suporte técnico da Paralax).
+  - **`anero-cafe-support`:** `ENABLE_AUDIO_SUPPORT="false"` (explicitamente desativado nos manifests K8s).
+  - **`duo-dermato-support`:** `ENABLE_AUDIO_SUPPORT="false"` (explicitamente desativado nos manifests K8s).
+- **Racional de Negócio:**
+  `customer-support-vehicles` e `paralax-support` possuem a maior volumetria e maturidade de testes operacionais no ecossistema. Mantendo `anero-cafe-support` e `duo-dermato-support` desligados nesta primeira fase, garante-se que os dois canais clínicos e comerciais operem sem riscos de cobranças ou alucinações de voz até a homologação completa dos modelos `gemini-3.8-flash`.
 
 ---
 
@@ -162,6 +179,29 @@ A implementação segue a separação estrita por ondas causais:
 │      `audio_model`, `audio_fallback_models`, `SUPPORTED_GLOBAL_MODELS` │
 │    • `support/routers/crm.py`: interceptação da flag no `/run`         │
 │    • `support/prompts.py`: diretrizes de áudio em inglês (`INSTRUCTION`)  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        ONDA 3 (GITOPS / ARGO CD)                       │
+│                           paralax-ia/argocd                            │
+│  • `base/customer-support-v2-vehicles/deployment.yaml` e patch `prod`: │
+│    - `ENABLE_AUDIO_SUPPORT: "true"`                                    │
+│    - `AUDIO_MODEL: "gemini-3.8-flash"`                                 │
+│    - `AUDIO_FALLBACK_MODELS: '["gemini-3.7-flash", "gemini-2.5-flash"]'│
+│  • `base/paralax-support/deployment.yaml` e patch `prod`:              │
+│    - `ENABLE_AUDIO_SUPPORT: "true"`                                    │
+│    - `AUDIO_MODEL: "gemini-3.8-flash"`                                 │
+│    - `AUDIO_FALLBACK_MODELS: '["gemini-3.7-flash", "gemini-2.5-flash"]'│
+│  • `base/anero-cafe-support/deployment.yaml` e patch `prod`:           │
+│    - `ENABLE_AUDIO_SUPPORT: "false"`                                   │
+│    - `AUDIO_MODEL: "gemini-3.8-flash"`                                 │
+│    - `AUDIO_FALLBACK_MODELS: '["gemini-3.7-flash", "gemini-2.5-flash"]'│
+│  • `base/duo-dermato-support/deployment.yaml` e patch `prod`:          │
+│    - `ENABLE_AUDIO_SUPPORT: "false"`                                   │
+│    - `AUDIO_MODEL: "gemini-3.8-flash"`                                 │
+│    - `AUDIO_FALLBACK_MODELS: '["gemini-3.7-flash", "gemini-2.5-flash"]'│
+│  • Verificação de integridade via `just verify` (Kustomize + Pytest)   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -369,12 +409,12 @@ async def run_crm(request: CrmRequest):
 
 ### 3.4. Matriz de Variáveis de Ambiente 12-Factor
 
-| Variável de Ambiente | Tipo | Padrão | Descrição |
-| :--- | :---: | :---: | :--- |
-| `ENABLE_AUDIO_SUPPORT` | `bool` | `false` | Feature flag mestre de áudio. Aceita `true`, `1`, `yes`. |
-| `AUDIO_MODEL` | `str` | `gemini-3.8-flash` | Modelo principal Gemini Multimodal para processamento turn-by-turn de áudio. Suporta alias legado `LIVE_AUDIO_MODEL`. |
-| `AUDIO_FALLBACK_MODELS` | `list[str]` | `["gemini-3.7-flash", "gemini-2.5-flash"]` | Modelos secundários multimodais em caso de 429/503. Suporta alias legado `LIVE_AUDIO_FALLBACK_MODELS`. |
-| `AUDIO_DISABLED_FALLBACK_MESSAGE` | `str` | *"Desculpe, o atendimento por mensagens de voz está temporariamente desativado..."* | Mensagem de cortesia retornada ao usuário final quando áudio for enviado com a flag desligada. |
+| Variável de Ambiente | Tipo | Padrão no Código | Valor no ArgoCD (Veículos & Support) | Valor no ArgoCD (Anero & Duo) | Descrição |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| `ENABLE_AUDIO_SUPPORT` | `bool` | `false` | `"true"` | `"false"` | Feature flag mestre de áudio. Controlada declarativamente no GitOps. |
+| `AUDIO_MODEL` | `str` | `gemini-3.8-flash` | `gemini-3.8-flash` | `gemini-3.8-flash` | Modelo principal Gemini Multimodal para processamento turn-by-turn. Suporta alias `LIVE_AUDIO_MODEL`. |
+| `AUDIO_FALLBACK_MODELS` | `list[str]` | `["gemini-3.7-flash", "gemini-2.5-flash"]` | `["gemini-3.7-flash", "gemini-2.5-flash"]` | `["gemini-3.7-flash", "gemini-2.5-flash"]` | Modelos secundários multimodais em caso de 429/503. Suporta alias `LIVE_AUDIO_FALLBACK_MODELS`. |
+| `AUDIO_DISABLED_FALLBACK_MESSAGE` | `str` | *"Desculpe, o atendimento por mensagens de voz está temporariamente desativado..."* | (Padrão) | (Padrão) | Mensagem de cortesia retornada ao usuário final quando áudio for recebido com a flag desligada. |
 
 ---
 
@@ -449,11 +489,74 @@ When users report system incidents, bugs, or questions via audio messages:
 
 ---
 
+### 3.6. Contratos GitOps e Declaração Explícita de Feature Flags no ArgoCD (`paralax-ia/argocd`)
+
+No repositório central de GitOps (`paralax-ia/argocd`), as variáveis de ambiente devem ser declaradas explicitamente nos manifests base e patches de ambiente Kustomize, aplicando a regra estrita de ativação:
+
+#### 1. Manifests de `customer-support-v2-vehicles` (Áudio Habilitado):
+- **Arquivo Base:** `base/customer-support-v2-vehicles/deployment.yaml`
+- **Patch Produção:** `prod/customer-support-v2-vehicles/patch-env.yaml`
+```yaml
+        - name: ENABLE_AUDIO_SUPPORT
+          value: "true"
+        - name: AUDIO_MODEL
+          value: gemini-3.8-flash
+        - name: AUDIO_FALLBACK_MODELS
+          value: '["gemini-3.7-flash", "gemini-2.5-flash"]'
+        - name: LIVE_AUDIO_MODEL
+          value: gemini-3.8-flash
+        - name: LIVE_AUDIO_FALLBACK_MODELS
+          value: '["gemini-3.7-flash", "gemini-2.5-flash"]'
+```
+
+#### 2. Manifests de `paralax-support` (Áudio Habilitado):
+- **Arquivo Base:** `base/paralax-support/deployment.yaml`
+- **Patch Produção:** `prod/paralax-support/patch-env.yaml`
+```yaml
+        - name: ENABLE_AUDIO_SUPPORT
+          value: "true"
+        - name: AUDIO_MODEL
+          value: gemini-3.8-flash
+        - name: AUDIO_FALLBACK_MODELS
+          value: '["gemini-3.7-flash", "gemini-2.5-flash"]'
+        - name: LIVE_AUDIO_MODEL
+          value: gemini-3.8-flash
+        - name: LIVE_AUDIO_FALLBACK_MODELS
+          value: '["gemini-3.7-flash", "gemini-2.5-flash"]'
+```
+
+#### 3. Manifests de `anero-cafe-support` (Áudio Desabilitado):
+- **Arquivo Base:** `base/anero-cafe-support/deployment.yaml`
+- **Patch Produção:** `prod/anero-cafe-support/patch-env.yaml`
+```yaml
+        - name: ENABLE_AUDIO_SUPPORT
+          value: "false"
+        - name: AUDIO_MODEL
+          value: gemini-3.8-flash
+        - name: AUDIO_FALLBACK_MODELS
+          value: '["gemini-3.7-flash", "gemini-2.5-flash"]'
+```
+
+#### 4. Manifests de `duo-dermato-support` (Áudio Desabilitado):
+- **Arquivo Base:** `base/duo-dermato-support/deployment.yaml`
+- **Patch Produção:** `prod/duo-dermato-support/patch-env.yaml`
+```yaml
+        - name: ENABLE_AUDIO_SUPPORT
+          value: "false"
+        - name: AUDIO_MODEL
+          value: gemini-3.8-flash
+        - name: AUDIO_FALLBACK_MODELS
+          value: '["gemini-3.7-flash", "gemini-2.5-flash"]'
+```
+
+---
+
 ## 4. Critérios de Aceitação (Gherkin)
 
-### Cenário 1: Mensagem de voz recebida com Feature Flag de Áudio ATIVADA (`ENABLE_AUDIO_SUPPORT=True`)
-- **Dado** que o agente está operando com a variável de ambiente `ENABLE_AUDIO_SUPPORT=true`
-- **E** a configuração `audio_model` está definida como `"gemini-3.8-flash"`
+### Cenário 1: Mensagem de voz recebida em agente com Feature Flag ATIVADA (`customer-support-vehicles` e `paralax-support`)
+- **Dado** que o pod está rodando com as variáveis injetadas pelo ArgoCD:
+  - `ENABLE_AUDIO_SUPPORT="true"`
+  - `AUDIO_MODEL="gemini-3.8-flash"`
 - **Quando** o webhook `/run` receber uma mensagem do CRM contendo parte do tipo `audio` (codec `audio/ogg; codecs=opus`)
 - **Então** o sistema deve detectar `has_audio == True`
 - **E** deve invocar `generate_crm_response` com `primary_model_override="gemini-3.8-flash"`
@@ -461,14 +564,9 @@ When users report system incidents, bugs, or questions via audio messages:
 - **E** deve retornar resposta textual coerente para o cliente via CRM API
 - **E** deve registrar log com nível INFO indicando roteamento para o modelo multimodal `"gemini-3.8-flash"`.
 
-### Cenário 2: Rejeição de Modelos Gemini Live no Contexto de CRM
-- **Dado** que um operador tente configurar `AUDIO_MODEL="gemini-3.8-live"` ou qualquer modelo fora de `SUPPORTED_GLOBAL_MODELS`
-- **Quando** o módulo de configuração carregar a classe `AgentModel`
-- **Então** o `field_validator` deve lançar um `ValueError` explicativo informando que o modelo não é suportado na location global do Vertex AI para o CRM
-- **E** deve impedir a inicialização com configuração de modelo incompatível.
-
-### Cenário 3: Mensagem de voz recebida com Feature Flag de Áudio DESATIVADA (`ENABLE_AUDIO_SUPPORT=False`)
-- **Dado** que o agente está operando com a variável de ambiente `ENABLE_AUDIO_SUPPORT=false` (padrão)
+### Cenário 2: Mensagem de voz recebida em agente com Feature Flag DESATIVADA (`anero-cafe-support` e `duo-dermato-support`)
+- **Dado** que o pod está rodando com a variável injetada pelo ArgoCD:
+  - `ENABLE_AUDIO_SUPPORT="false"`
 - **Quando** o webhook `/run` receber uma mensagem do CRM contendo parte do tipo `audio`
 - **Então** o sistema deve detectar `has_audio == True`
 - **E** deve verificar que `enable_audio_support` é `False`
@@ -477,19 +575,34 @@ When users report system incidents, bugs, or questions via audio messages:
 - **E** deve retornar HTTP 200 para o CRM sem lançar exceção 500
 - **E** deve registrar log de advertência (WARNING) indicando que o áudio foi interceptado e recusado pela feature flag.
 
-### Cenário 4: Mensagem puramente textual recebida com Feature Flag de Áudio ATIVADA (`ENABLE_AUDIO_SUPPORT=True`)
-- **Dado** que a feature flag `ENABLE_AUDIO_SUPPORT=true` está ativada
+### Cenário 3: Validação da Configuração Declarativa GitOps no ArgoCD (`paralax-ia/argocd`)
+- **Dado** o repositório `paralax-ia/argocd`
+- **Quando** a suíte `just verify` for executada
+- **Então** a validação `kubectl kustomize base/customer-support-v2-vehicles` e `prod/customer-support-v2-vehicles` deve conter `ENABLE_AUDIO_SUPPORT` com valor `"true"`
+- **E** a validação `kubectl kustomize base/paralax-support` e `prod/paralax-support` deve conter `ENABLE_AUDIO_SUPPORT` com valor `"true"`
+- **E** a validação `kubectl kustomize base/anero-cafe-support` e `prod/anero-cafe-support` deve conter `ENABLE_AUDIO_SUPPORT` com valor `"false"`
+- **E** a validação `kubectl kustomize base/duo-dermato-support` e `prod/duo-dermato-support` deve conter `ENABLE_AUDIO_SUPPORT` com valor `"false"`
+- **E** todos os modelos de áudio devem apontar para `"gemini-3.8-flash"`, sem qualquer referência aos modelos Live.
+
+### Cenário 4: Rejeição de Modelos Gemini Live no Contexto de CRM
+- **Dado** que um operador tente configurar `AUDIO_MODEL="gemini-3.8-live"` ou qualquer modelo fora de `SUPPORTED_GLOBAL_MODELS`
+- **Quando** o módulo de configuração carregar a classe `AgentModel`
+- **Então** o `field_validator` deve lançar um `ValueError` explicativo informando que o modelo não é suportado na location global do Vertex AI para o CRM
+- **E** deve impedir a inicialização com configuração de modelo incompatível.
+
+### Cenário 5: Mensagem puramente textual recebida com Feature Flag de Áudio ATIVADA
+- **Dado** que a feature flag `ENABLE_AUDIO_SUPPORT=true` está ativada no pod
 - **Quando** o webhook `/run` receber uma mensagem contendo apenas texto (`has_audio == False`)
 - **Então** o sistema deve selecionar o modelo textual padrão do agente (`model="gemini-3.8-flash"`)
 - **E** deve orquestrar a resposta normalmente.
 
-### Cenário 5: Mensagem combinada (áudio + texto) com Feature Flag ATIVADA
+### Cenário 6: Mensagem combinada (áudio + texto) com Feature Flag ATIVADA
 - **Dado** que `ENABLE_AUDIO_SUPPORT=true`
 - **Quando** o webhook receber mensagem com uma parte de áudio e uma parte de texto explicativo
 - **Então** o método `to_genai_content()` deve encapsular ambas as partes no mesmo objeto `Content(role="user")`
 - **E** o modelo multimodal turn-by-turn `gemini-3.8-flash` deve ser acionado com o conteúdo multimodal completo.
 
-### Cenário 6: Resiliência e Fallback sob Erro Transitório
+### Cenário 7: Resiliência e Fallback sob Erro Transitório
 - **Dado** que `ENABLE_AUDIO_SUPPORT=true`
 - **E** o modelo principal `gemini-3.8-flash` retorna erro HTTP 429 (Rate Limit) ou 503 (Overloaded)
 - **Quando** `generate_crm_response` executar a chamada
@@ -497,26 +610,33 @@ When users report system incidents, bugs, or questions via audio messages:
 - **E**, se persistir, para `gemini-2.5-flash`
 - **E** o usuário deve receber a resposta normalmente sem quebra do fluxo conversacional.
 
-### Cenário 7: Consistência Estrutural em Todos os 4 Agentes de IA
-- **Dado** os repositórios `customer-support-vehicles`, `anero-cafe-support`, `duo-dermato-support` e `paralax-support`
-- **Quando** a suíte de testes `just verify` for executada em cada um
-- **Então** todos os 4 agentes devem validar a presença de `enable_audio_support`, `audio_model` e `audio_fallback_models` em `config.py`
-- **E** todos os 4 agentes devem possuir testes unitários reproduzindo os cenários com flag ligada e desligada com docstrings iniciando por `Business Rule:`.
+### Cenário 8: Consistência Estrutural em Todos os Repositórios Afetados
+- **Dado** os repositórios `paralax-evo-crm`, `customer-support-vehicles`, `anero-cafe-support`, `duo-dermato-support`, `paralax-support` e `argocd`
+- **Quando** o comando `just verify` for executado na raiz de cada um dos spokes
+- **Então** 100% dos testes, checagens de tipos e validações declarativas devem passar sem falhas
+- **E** os testes unitários de regras de negócio devem possuir docstrings iniciando por `Business Rule:`.
 
 ---
 
 ## 5. Plano de Rollout e Compatibilidade
 
-### 5.1. Estratégia de Versionamento SemVer
-- **`paralax-ia/paralax-evo-crm` (Onda 1):**
+### 5.1. Estratégia de Versionamento SemVer e Ondas
+
+- **Onda 1: `paralax-ia/paralax-evo-crm` (SDK):**
   - Incremento SemVer Minor (`v0.5.0` ou compatível) introduzindo constantes e contratos auxiliares de feature flag e mensagem de fallback.
   - Publicação no Google Cloud Artifact Registry.
-- **Repositórios de Agentes (Onda 2):**
+- **Onda 2: Repositórios de Agentes de IA:**
   - Atualização do lockfile (`uv lock --upgrade-package paralax-evo-crm`).
-  - Deploy em homologação com `ENABLE_AUDIO_SUPPORT=false`.
-  - Execução de testes de regressão automatizados em `just verify`.
+  - Implementação do suporte a feature flag e roteamento para `gemini-3.8-flash` com testes unitários em `just verify`.
+  - Construção e publicação das novas imagens Docker no Artifact Registry (`us-central1-docker.pkg.dev/paralax-infra/prod-docker-registry/...`).
+- **Onda 3: Repositório GitOps (`paralax-ia/argocd`):**
+  - Atualização dos manifests Kustomize com as tags de imagem atualizadas e as variáveis declaradas explicitamente:
+    - `ENABLE_AUDIO_SUPPORT="true"` em `customer-support-v2-vehicles` e `paralax-support`.
+    - `ENABLE_AUDIO_SUPPORT="false"` em `anero-cafe-support` e `duo-dermato-support`.
+  - Validação estática com `just verify` no repositório `argocd`.
+  - Sincronização automática via ArgoCD Root App nos clusters de produção (`namespace: crm`).
 
-### 5.2. Plano de Ativação Gradual (Canary Rollout)
-1. **Fase 1 (Silent Rollout):** Deploy de todos os agentes em produção com `ENABLE_AUDIO_SUPPORT=false`. Áudios recebidos recebem resposta imediata de fallback de texto amigável.
-2. **Fase 2 (Canary Brasília Automóveis):** Ativação de `ENABLE_AUDIO_SUPPORT=true` apenas para `customer-support-vehicles` para validação de volume de voz de clientes de concessionária com `gemini-3.8-flash`.
-3. **Fase 3 (Expansão Ecossistema):** Ativação de `ENABLE_AUDIO_SUPPORT=true` para `anero-cafe-support`, `duo-dermato-support` e `paralax-support` sob monitoramento de métricas no Langfuse e dashboard de latência.
+### 5.2. Plano de Ativação Gradual (Canary Phased Rollout)
+1. **Fase 1 (Produção Piloto):** Sincronização do ArgoCD com áudio ativado **exclusivamente** para `customer-support-vehicles` e `paralax-support`. Monitoramento de telemetria no Langfuse (latência de inferência de áudio, consumo de tokens multimodais e erros 429/503).
+2. **Fase 2 (Homologação Anero Café):** Alteração declarativa no ArgoCD de `ENABLE_AUDIO_SUPPORT="true"` para `anero-cafe-support` em staging/canary.
+3. **Fase 3 (Homologação Duo Dermato):** Ativação de `ENABLE_AUDIO_SUPPORT="true"` para `duo-dermato-support` após validação da conformidade médica e ética de voz.

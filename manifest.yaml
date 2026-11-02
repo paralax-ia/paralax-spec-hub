@@ -142,3 +142,17 @@ repositories:
     release_strategy: "semver"
     deploy_target: "production"
 
+  # GitOps e Manifests K8s (ArgoCD)
+  - name: "argocd"
+    repo: "paralax-ia/argocd"
+    role: "gitops"
+    language: "yaml"
+    depends_on:
+      - "customer-support-vehicles"
+      - "paralax-support"
+      - "anero-cafe-support"
+      - "duo-dermato-support"
+    release_strategy: "trunk"
+    deploy_target: "production"
+
+

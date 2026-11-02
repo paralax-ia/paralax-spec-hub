@@ -10,7 +10,7 @@ The human operator requested a refinement/change in the technical specification 
 ```markdown
 ---
 spec_id: SPEC-010
-title: "Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelo Gemini Live"
+title: "Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelos Gemini Multimodais (Flash)"
 product:
   - paralax-platform
   - customer-support-vehicles
@@ -61,7 +61,7 @@ prompts:
 status: DRAFT
 ---
 
-# SPEC-010: Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelo Gemini Live
+# SPEC-010: Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelos Gemini Multimodais (Flash)
 
 > **Product:** [`paralax-platform`](../products/paralax-platform.yaml) | [`customer-support-vehicles`](../products/customer-support-vehicles.yaml) | [`duo-dermato-support`](../products/duo-dermato-support.yaml) | [`anero-cafe-support`](../products/anero-cafe-support.yaml) | [`paralax-support`](../products/paralax-support.yaml)  
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
@@ -70,35 +70,60 @@ status: DRAFT
 > **Status:** DRAFT  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-11-02  
+> **Decisão Arquitetural Crítica:** O modelo Gemini Live NÃO é compatível com webhooks de CRM; a inferência de áudio no CRM utiliza obrigatoriamente modelos Gemini Multimodais nativos turn-by-turn (`gemini-3.8-flash` e sua hierarquia de fallback)  
 > **Arquitetura 12-Factor:** Zero arquivos de configuração no Git; toda parametrização gerada exclusivamente via variáveis de ambiente  
 > **Diretriz de Prompts (SPEC-PROMPT-01):** Prompts de sistema e instruções LLM estritamente redigidos em inglês  
-> **Regra Mandatória de Áudio:** Mensagens com áudio utilizam obrigatoriamente a família de modelos Gemini Live (`gemini-3.8-live` e fallbacks) quando a feature flag estiver ativada  
 > **Governança de Feature Flag:** Ativação granular de áudio por agente via `ENABLE_AUDIO_SUPPORT` (booleano, default `False`)  
 
 ---
 
 ## 1. Contexto e Motivação
 
-A especificação pioneira **SPEC-009** introduziu o suporte de áudio no agente automotivo (`customer-support-vehicles`), estabelecendo as fundações de ingestão de mensagens de voz via WhatsApp através dos modelos da família **Gemini Live** (`gemini-3.8-live`, `gemini-3.8-live-extended-thinking` e `gemini-2.0-flash`) e a biblioteca base `paralax-evo-crm`.
-
-Com a expansão da plataforma Paralax IA, todos os agentes conversacionais do ecossistema atendem canais com alto volume de comunicação por voz (WhatsApp, canais de mensageria omnicanal):
-1. **Concessionária Brasília Automóveis (`customer-support-vehicles`):** Clientes enviando áudios sobre marcas, modelos, orçamentos, fotos e avaliação de usados.
+Nos canais de atendimento digital operados pela Paralax IA (WhatsApp via Evolution CRM e mensageria omnicanal), uma parcela expressiva das interações dos usuários finais ocorre via notas de voz (áudios). Essa demanda manifesta-se nos diversos domínios de negócio da plataforma:
+1. **Concessionária Brasília Automóveis (`customer-support-vehicles`):** Clientes enviando áudios sobre marcas, modelos, orçamentos, fotos e avaliação de seminovos.
 2. **Cafeteria Gourmet Anero Café (`anero-cafe-support`):** Clientes solicitando cardápio, grãos especiais, métodos de extração, encomendas e reservas por áudio.
 3. **Clínica Dermatológica Duo Dermato (`duo-dermato-support`):** Pacientes detalhando sintomas, tratamentos e agendamentos de consultas via mensagens de voz.
 4. **Suporte Corporativo Paralax (`paralax-support`):** Colaboradores e clientes descrevendo incidentes, dúvidas e suporte técnico por voz.
 
-### O Desafio de Governança: Feature Flag Transversal
-Embora o processamento multimodal nativo do Gemini Live ofereça compreensão acústica superior sem requerer pipelines lentos e desconectados de STT (Speech-to-Text), a ativação do processamento de áudio envolve considerações de custo de inferência, capacidade de cota da API e requisitos contratuais por cliente/tenant:
-- **Nem todos os canais ou clientes desejam ou autorizam o consumo de áudio:** É mandatório que o suporte a áudio possa ser ligado e desligado dinamicamente por ambiente e por agente via **Feature Flag 12-Factor (`ENABLE_AUDIO_SUPPORT`)**.
-- **Comportamento quando a Feature Flag está Desativada (`ENABLE_AUDIO_SUPPORT=False`):**
-  - O agente **não deve** tentar submeter o áudio para o LLM (evitando custos e potenciais falhas de cota).
-  - O agente **não deve** gerar erro 500 ou descartar silenciosamente a mensagem do usuário.
-  - O agente deve responder de forma cortês e imediata ao cliente no WhatsApp/CRM, notificando que o atendimento naquele canal é realizado por texto (ex: *"Desculpe, o atendimento por mensagens de voz está temporariamente indisponível neste canal. Por favor, envie sua mensagem por escrito para que eu possa te ajudar!"*).
-- **Comportamento quando a Feature Flag está Ativada (`ENABLE_AUDIO_SUPPORT=True`):**
+---
+
+### 1.1. Por Que o Modelo Gemini Live Não Funciona para o CRM
+
+Durante os testes de integração e validação operacional no Gateway de Aprovação, identificou-se uma incompatibilidade estrutural profunda entre a API **Gemini Live** e a arquitetura de mensageria assíncrona do CRM:
+
+1. **Descompasso de Paradigmas (Full-Duplex Streaming vs. Webhook HTTP Turn-by-Turn):**
+   - A **Gemini Live API** foi desenvolvida para sessões interativas em tempo real baseadas em **WebSockets bidirecionais contínuos** (`BidiStreamSession`), com streaming full-duplex de áudio (áudio contínuo de entrada e saída, interrupções por detecção de fala de baixíssima latência), simulando chamadas telefônicas ao vivo.
+   - O ecossistema de CRM (Evo CRM / WhatsApp) opera no paradigma **desacoplado, sem estado (stateless) e baseado em turnos (turn-by-turn)**:
+     - O cliente grava e envia uma nota de voz no WhatsApp.
+     - O CRM armazena a mídia e despacha uma requisição HTTP `POST /run` para o webhook do agente com o arquivo de áudio (em bytes base64 ou link de mídia).
+     - O agente processa a requisição completa, executa chamadas a ferramentas de negócio (bancos de dados, estoques, calendários) e responde através de uma chamada REST à API do CRM (`crm_api.send_message`).
+     - A conexão HTTP fecha imediatamente após a resposta.
+   - Forçar uma conexão WebSocket Gemini Live dentro de um webhook HTTP turn-by-turn introduz complexidade excessiva, fragilidade no ciclo de vida de sockets, falhas em ambientes serverless (Cloud Run) e custos desnecessários de streaming ativo para mensagens assíncronas estáticas.
+
+2. **Incompatibilidade com o Runner do Google ADK e Chamadas a Ferramentas (Tool Calling):**
+   - No runner oficial do Google ADK (`google-adk`), a orquestração conversacional de agentes utiliza o método padrão turn-by-turn `runner.run_async(session_id=..., content=...)` sobre a API Vertex AI `generateContent`.
+   - Os modelos Gemini Live não operam como endpoints padrão `generateContent` na location `global` do Vertex AI para requisições com `Part.from_bytes`. Tentar invocar nomes de modelo Gemini Live via `generateContent` resulta em erros de modelo não suportado (`ValueError: Modelo inválido ou não suportado`) ou falhas de protocolo.
+
+3. **A Solução Homologada: Modelos Gemini Multimodais Nativos (Gemini Flash):**
+   - Os modelos **Gemini Multimodais** (`gemini-3.8-flash`, com fallbacks para `gemini-3.7-flash` e `gemini-2.5-flash`) são modelos nativamente multimodais que suportam ingestão direta de áudio bruto (`audio/ogg; codecs=opus`, `audio/mp4`, `audio/wav`, `audio/mpeg`) via `Part.from_bytes` na API REST/gRPC `generateContent`.
+   - Eles oferecem suporte completo e robusto a **Tool Calling (Function Calling)** com parâmetros extraídos diretamente do áudio gravado, respeitam perfeitamente o ciclo de vida stateless do webhook `/run`, integram-se sem atritos ao runner do Google ADK e possuem validação completa na location `global` do Vertex AI.
+
+---
+
+### 1.2. O Desafio de Governança: Feature Flag Transversal (`ENABLE_AUDIO_SUPPORT`)
+
+O suporte a áudio envolve custos computacionais e considerações contratuais por cliente e por canal. Nem todos os clientes ou canais de mensageria têm contrato ou perfil para processamento de voz.
+
+Por isso, o suporte a áudio deve ser governado por uma **Feature Flag 12-Factor (`ENABLE_AUDIO_SUPPORT`)**, aplicável universalmente a todos os agentes:
+- **Quando a Feature Flag está Desativada (`ENABLE_AUDIO_SUPPORT=False`, Padrão):**
+  - O agente **não deve** tentar submeter o áudio para o LLM (evitando custos e consumo desnecessário de cota).
+  - O agente **não deve** retornar erro HTTP 500 nem descartar silenciosamente a mensagem do usuário.
+  - O agente deve responder de forma cortês e imediata ao cliente no WhatsApp/CRM, notificando que o atendimento naquele canal é realizado por texto (ex: *"Desculpe, o atendimento por mensagens de voz está temporariamente desativado neste canal. Por favor, envie sua mensagem por texto para que eu possa te ajudar!"*).
+- **Quando a Feature Flag está Ativada (`ENABLE_AUDIO_SUPPORT=True`):**
   - O webhook detecta partes de áudio (`part.is_audio()`).
   - O payload é convertido para GenAI `Content` multimodal via `Part.from_bytes(data=..., mime_type=...)`.
-  - O roteamento dinâmico seleciona obrigatoriamente o modelo principal `gemini-3.8-live` com cascata de fallback (`gemini-3.8-live-extended-thinking` ➔ `gemini-2.0-flash`).
-  - As mensagens puramente de texto continuam utilizando os modelos textuais padrão (`gemini-3.8-flash` / fallbacks).
+  - O roteamento dinâmico seleciona o modelo multimodal homologado de áudio (`gemini-3.8-flash`) com cascata de fallback (`gemini-3.7-flash` ➔ `gemini-2.5-flash`).
+  - Mensagens puramente textuais continuam utilizando os modelos textuais padrão.
 
 ---
 
@@ -113,10 +138,9 @@ A implementação segue a separação estrita por ondas causais:
 │  • Validação e padronização dos modelos de áudio em `models.py`:       │
 │    - `CrmMessagePart.is_audio()`, `to_genai_part()`                    │
 │    - `CrmMessage.has_audio()`, `to_genai_content()`                    │
-│  • Inclusão de mensagem padrão de fallback em `models.py`:             │
-│    `DEFAULT_AUDIO_DISABLED_MESSAGE`                                    │
+│  • Constante padrão de fallback: `DEFAULT_AUDIO_DISABLED_MESSAGE`      │
 │  • Orquestrador `generate_crm_response()` em `generator.py`            │
-│    suportando override dinâmico de modelo e fallbacks de áudio         │
+│    suportando override dinâmico de modelo multimodal turn-by-turn      │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
@@ -125,25 +149,27 @@ A implementação segue a separação estrita por ondas causais:
 │                                                                        │
 │ 1. paralax-ia/customer-support-vehicles                                │
 │    • `vehicles/config.py`: `enable_audio_support: bool = False`,       │
-│      `live_audio_model: str`, `live_audio_fallback_models: list[str]`  │
+│      `audio_model: str = "gemini-3.8-flash"`,                          │
+│      `audio_fallback_models: list[str] = ["gemini-3.7-flash", ...]`,   │
+│      validação estrita contra `SUPPORTED_GLOBAL_MODELS`                │
 │    • `vehicles/routers/crm.py`: interceptação da flag no `/run`        │
 │    • `vehicles/prompts.py`: diretrizes de áudio em inglês (`INSTRUCTION`)│
 │                                                                        │
 │ 2. paralax-ia/anero-cafe-support                                       │
 │    • `anero_cafe/config.py`: `enable_audio_support: bool = False`,     │
-│      `live_audio_model: str`, `live_audio_fallback_models: list[str]`  │
+│      `audio_model`, `audio_fallback_models`, `SUPPORTED_GLOBAL_MODELS` │
 │    • `anero_cafe/routers/crm.py`: interceptação da flag no `/run`      │
 │    • `anero_cafe/prompts.py`: diretrizes de áudio em inglês (`INSTRUCTION`)│
 │                                                                        │
 │ 3. paralax-ia/duo-dermato-support                                      │
 │    • `duo_dermato/config.py`: `enable_audio_support: bool = False`,    │
-│      `live_audio_model: str`, `live_audio_fallback_models: list[str]`  │
+│      `audio_model`, `audio_fallback_models`, `SUPPORTED_GLOBAL_MODELS` │
 │    • `duo_dermato/routers/crm.py`: interceptação da flag no `/run`     │
 │    • `duo_dermato/prompts.py`: diretrizes de áudio em inglês (`INSTRUCTION`)│
 │                                                                        │
 │ 4. paralax-ia/paralax-support                                          │
 │    • `support/config.py`: `enable_audio_support: bool = False`,         │
-│      `live_audio_model: str`, `live_audio_fallback_models: list[str]`  │
+│      `audio_model`, `audio_fallback_models`, `SUPPORTED_GLOBAL_MODELS` │
 │    • `support/routers/crm.py`: interceptação da flag no `/run`         │
 │    • `support/prompts.py`: diretrizes de áudio em inglês (`INSTRUCTION`)  │
 └────────────────────────────────────────────────────────────────────────┘
@@ -161,19 +187,20 @@ A implementação segue a separação estrita por ondas causais:
   - `pydantic-settings>=2.0.0` (configurações 12-Factor declarativas via variáveis de ambiente).
   - `httpx>=0.28.0` (download assíncrono seguro de áudios remotos quando recebidos via `media_url`).
 - **Protocolo e Modo de Execução:**
-  - REST/gRPC turn-by-turn assíncrono. O webhook `/run` recebe a mensagem do CRM (áudio já persistido ou codificado em base64/URL pública), converte em `Part.from_bytes(data=bytes, mime_type=mime_type)` e submete ao `runner.run_async()` com o modelo Gemini Live configurado.
-  - Streaming bidirecional em tempo real (WebSocket) **não** é exigido para a recepção de notas de voz de mensageria assíncrona (WhatsApp/CRM), simplificando a infraestrutura e garantindo compatibilidade total com o modelo de execução em Cloud Run/Kubernetes.
+  - **REST/gRPC turn-by-turn assíncrono exclusivamente.**
+  - O webhook `/run` recebe a mensagem do CRM (áudio persistido pelo CRM em base64 ou URL pública), decodifica os bytes e mime-type (`Part.from_bytes(data=bytes, mime_type=mime_type)`), e submete ao `runner.run_async()` com o modelo multimodal homologado (`gemini-3.8-flash`).
+  - O uso de sessões WebSocket bidirecionais (Gemini Live) é expressamente proibido para os webhooks do CRM devido à incompatibilidade de protocolo e timeout em arquitetura de microsserviços.
 - **Limitações Conhecidas e Paridade de Recursos:**
-  - **Tool Calling (Function Calling):** Suportado nativamente pelo modelo `gemini-3.8-live` em modo multimodal turn-by-turn. As ferramentas de busca de veículos, cardápio de cafés, agendamentos médicos e triagem de suporte permanecem ativas e funcionais ao processar áudio.
-  - **Codecs Suportados:** Ingestão nativa de `audio/ogg; codecs=opus` (padrão de mensagens de voz do WhatsApp), `audio/mp4`, `audio/wav`, `audio/mpeg`.
+  - **Tool Calling (Function Calling):** Suportado nativamente e com paridade de 100% pelos modelos Gemini Multimodais (`gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-2.5-flash`) em modo turn-by-turn com áudio.
+  - **Codecs de Áudio Suportados:** `audio/ogg; codecs=opus` (padrão oficial de mensagens de voz do WhatsApp), `audio/mp4`, `audio/wav`, `audio/mpeg`.
   - **Tamanho Máximo de Mídia:** Payloads de áudio limitados a 25 MB por requisição.
-  - **Preservação de Contexto:** O histórico de conversa prévio (`session_service`) é mantido intacto, permitindo alternar de forma transparente entre turnos de texto e turnos de áudio.
+  - **Preservação de Contexto Conversacional:** O histórico de conversa prévio (`session_service`) é mantido intacto, permitindo alternar de forma transparente entre turnos de texto e turnos de áudio.
 - **Estratégia de Spike (Onda 0):**
-  - Concluída com sucesso na validação da SPEC-009. Os testes unitários e de integração em `paralax-evo-crm` e `customer-support-vehicles` comprovaram a viabilidade técnica de ingestão multimodal com `gemini-3.8-live`.
+  - Desnecessária nova spike: a viabilidade da ingestão turn-by-turn via `Part.from_bytes` com `gemini-3.8-flash` já foi comprovada no pipeline de testes do ecossistema.
 - **Plano de Fallback Arquitetural:**
-  1. Se `gemini-3.8-live` retornar erro transitório (429 rate limit ou 503 service unavailable), a chamada executa fallback automático para `gemini-3.8-live-extended-thinking`.
-  2. Persistindo a falha, executa fallback para `gemini-2.0-flash`.
-  3. Caso a feature flag `ENABLE_AUDIO_SUPPORT` esteja explicitamente `False`, o roteador do agente aborta a submissão ao LLM e despacha imediatamente a mensagem educativa configurada para o usuário final, com status HTTP 200 para o CRM.
+  1. Se `gemini-3.8-flash` retornar erro transitório (429 rate limit ou 503 service unavailable), a chamada executa fallback automático para `gemini-3.7-flash`.
+  2. Persistindo a falha, executa fallback para `gemini-2.5-flash`.
+  3. Caso a feature flag `ENABLE_AUDIO_SUPPORT` esteja `False`, o roteador do agente aborta a submissão ao LLM e despacha imediatamente a mensagem educativa configurada para o usuário final, com status HTTP 200 para o CRM.
 
 ---
 
@@ -182,12 +209,23 @@ A implementação segue a separação estrita por ondas causais:
 Cada agente de IA implementa a seguinte estrutura padronizada de configuração em seu respectivo módulo de configuração (`config.py`):
 
 ```python
-from pydantic import BaseModel, Field
+from typing import ClassVar
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+SUPPORTED_GLOBAL_MODELS: list[str] = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+]
 
 
 class AgentModel(BaseModel):
     """Configurações de modelos do agente e feature flags multimodais."""
+
+    SUPPORTED_MODELS: ClassVar[list[str]] = SUPPORTED_GLOBAL_MODELS
 
     name: str = Field(
         default="conversational_agent",
@@ -198,33 +236,77 @@ class AgentModel(BaseModel):
         description="Modelo principal para interações puramente textuais."
     )
     fallback_models: list[str] = Field(
-        default=["gemini-3.7-flash", "gemini-3.6-flash"],
+        default=["gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.5-flash"],
         description="Modelos secundários para interação textual."
     )
     enable_audio_support: bool = Field(
         default=False,
-        validation_alias="ENABLE_AUDIO_SUPPORT",
+        validation_alias=AliasChoices(
+            "enable_audio_support",
+            "ENABLE_AUDIO_SUPPORT",
+        ),
         description="Feature flag que habilita ou desabilita o processamento de áudios."
     )
-    live_audio_model: str = Field(
-        default="gemini-3.8-live",
-        validation_alias="LIVE_AUDIO_MODEL",
-        description="Modelo Gemini Live oficial para processamento de áudio."
+    audio_model: str = Field(
+        default="gemini-3.8-flash",
+        validation_alias=AliasChoices(
+            "audio_model",
+            "AUDIO_MODEL",
+            "live_audio_model",
+            "LIVE_AUDIO_MODEL",
+        ),
+        description="Modelo Gemini Multimodal oficial para processamento de áudio turn-by-turn.",
     )
-    live_audio_fallback_models: list[str] = Field(
-        default=["gemini-3.8-live-extended-thinking", "gemini-2.0-flash"],
-        validation_alias="LIVE_AUDIO_FALLBACK_MODELS",
-        description="Modelos Gemini Live de contingência e fallback de áudio."
+    audio_fallback_models: list[str] = Field(
+        default=["gemini-3.7-flash", "gemini-2.5-flash"],
+        validation_alias=AliasChoices(
+            "audio_fallback_models",
+            "AUDIO_FALLBACK_MODELS",
+            "live_audio_fallback_models",
+            "LIVE_AUDIO_FALLBACK_MODELS",
+        ),
+        description="Modelos Gemini Multimodais de contingência e fallback de áudio.",
     )
     audio_disabled_fallback_message: str = Field(
         default=(
             "Desculpe, o atendimento por mensagens de voz está temporariamente desativado "
             "neste canal. Por favor, envie sua mensagem por texto para que eu possa te ajudar!"
         ),
-        validation_alias="AUDIO_DISABLED_FALLBACK_MESSAGE",
+        validation_alias=AliasChoices(
+            "audio_disabled_fallback_message",
+            "AUDIO_DISABLED_FALLBACK_MESSAGE",
+        ),
         description="Mensagem enviada ao cliente quando áudio for recebido com a feature flag desligada."
     )
     enable_heartbeat: bool = Field(default=True)
+
+    @field_validator("model", "audio_model")
+    @classmethod
+    def validate_model(cls, value: str) -> str:
+        """Valida se o identificador do modelo pertence aos modelos globais suportados."""
+        if not isinstance(value, str):
+            raise TypeError(f"O modelo deve ser uma string, recebido: {type(value).__name__}")
+        cleaned_value = value.strip()
+        if not cleaned_value:
+            raise ValueError("O modelo não pode ser vazio.")
+        if cleaned_value not in SUPPORTED_GLOBAL_MODELS:
+            raise ValueError(
+                f"Modelo inválido ou não suportado para CRM: '{value}'. "
+                f"Modelos suportados na location global: {SUPPORTED_GLOBAL_MODELS}"
+            )
+        return cleaned_value
+
+    @field_validator("fallback_models", "audio_fallback_models")
+    @classmethod
+    def validate_fallback_models(cls, value: list[str]) -> list[str]:
+        """Valida a lista de modelos de fallback contra os modelos globais suportados."""
+        if not isinstance(value, list):
+            raise TypeError("Modelos de fallback devem ser fornecidos como lista.")
+        validated: list[str] = []
+        for model_name in value:
+            cls.validate_model(model_name)
+            validated.append(model_name.strip())
+        return validated
 ```
 
 ---
@@ -258,12 +340,12 @@ async def run_crm(request: CrmRequest):
             )
             return {"status": "success", "detail": "Audio received but disabled by feature flag"}
 
-        # Áudio habilitado: roteamento obrigatório para família Gemini Live
-        primary_model = config.agent_settings.live_audio_model
-        fallback_models = config.agent_settings.live_audio_fallback_models
+        # Áudio habilitado: roteamento para modelo Gemini Multimodal homologado
+        primary_model = config.agent_settings.audio_model
+        fallback_models = config.agent_settings.audio_fallback_models
         logger.info(
             "Audio instruction detected and feature flag ENABLE_AUDIO_SUPPORT=True. "
-            "Routing to Gemini Live model: '%s' (fallbacks: %s)",
+            "Routing to multimodal audio model: '%s' (fallbacks: %s)",
             primary_model,
             fallback_models,
         )
@@ -300,8 +382,8 @@ async def run_crm(request: CrmRequest):
 | Variável de Ambiente | Tipo | Padrão | Descrição |
 | :--- | :---: | :---: | :--- |
 | `ENABLE_AUDIO_SUPPORT` | `bool` | `false` | Feature flag mestre de áudio. Aceita `true`, `1`, `yes`. |
-| `LIVE_AUDIO_MODEL` | `str` | `gemini-3.8-live` | Modelo principal da família Gemini Live para processamento de áudio. |
-| `LIVE_AUDIO_FALLBACK_MODELS` | `list[str]` | `["gemini-3.8-live-extended-thinking", "gemini-2.0-flash"]` | Modelos Live secundários em caso de 429/503. |
+| `AUDIO_MODEL` | `str` | `gemini-3.8-flash` | Modelo principal Gemini Multimodal para processamento turn-by-turn de áudio. Suporta alias legado `LIVE_AUDIO_MODEL`. |
+| `AUDIO_FALLBACK_MODELS` | `list[str]` | `["gemini-3.7-flash", "gemini-2.5-flash"]` | Modelos secundários multimodais em caso de 429/503. Suporta alias legado `LIVE_AUDIO_FALLBACK_MODELS`. |
 | `AUDIO_DISABLED_FALLBACK_MESSAGE` | `str` | *"Desculpe, o atendimento por mensagens de voz está temporariamente desativado..."* | Mensagem de cortesia retornada ao usuário final quando áudio for enviado com a flag desligada. |
 
 ---
@@ -381,47 +463,54 @@ When users report system incidents, bugs, or questions via audio messages:
 
 ### Cenário 1: Mensagem de voz recebida com Feature Flag de Áudio ATIVADA (`ENABLE_AUDIO_SUPPORT=True`)
 - **Dado** que o agente está operando com a variável de ambiente `ENABLE_AUDIO_SUPPORT=true`
-- **E** a configuração `live_audio_model` está definida como `"gemini-3.8-live"`
+- **E** a configuração `audio_model` está definida como `"gemini-3.8-flash"`
 - **Quando** o webhook `/run` receber uma mensagem do CRM contendo parte do tipo `audio` (codec `audio/ogg; codecs=opus`)
 - **Então** o sistema deve detectar `has_audio == True`
-- **E** deve invocar `generate_crm_response` com `primary_model_override="gemini-3.8-live"`
-- **E** deve processar a instrução de voz com sucesso, retornando resposta textual coerente para o cliente via CRM API
-- **E** deve registrar log com nível INFO indicando roteamento para o modelo Gemini Live.
+- **E** deve invocar `generate_crm_response` com `primary_model_override="gemini-3.8-flash"`
+- **E** deve processar a instrução de voz turn-by-turn via `Part.from_bytes` com sucesso
+- **E** deve retornar resposta textual coerente para o cliente via CRM API
+- **E** deve registrar log com nível INFO indicando roteamento para o modelo multimodal `"gemini-3.8-flash"`.
 
-### Cenário 2: Mensagem de voz recebida com Feature Flag de Áudio DESATIVADA (`ENABLE_AUDIO_SUPPORT=False`)
+### Cenário 2: Rejeição de Modelos Gemini Live no Contexto de CRM
+- **Dado** que um operador tente configurar `AUDIO_MODEL="gemini-3.8-live"` ou qualquer modelo fora de `SUPPORTED_GLOBAL_MODELS`
+- **Quando** o módulo de configuração carregar a classe `AgentModel`
+- **Então** o `field_validator` deve lançar um `ValueError` explicativo informando que o modelo não é suportado na location global do Vertex AI para o CRM
+- **E** deve impedir a inicialização com configuração de modelo incompatível.
+
+### Cenário 3: Mensagem de voz recebida com Feature Flag de Áudio DESATIVADA (`ENABLE_AUDIO_SUPPORT=False`)
 - **Dado** que o agente está operando com a variável de ambiente `ENABLE_AUDIO_SUPPORT=false` (padrão)
 - **Quando** o webhook `/run` receber uma mensagem do CRM contendo parte do tipo `audio`
 - **Então** o sistema deve detectar `has_audio == True`
 - **E** deve verificar que `enable_audio_support` é `False`
-- **E** NÃO deve invocar o runner do LLM nem consumir cotas da API Gemini Live
+- **E** NÃO deve invocar o runner do LLM nem consumir cotas da API
 - **E** deve despachar para o cliente via CRM API a mensagem amigável: *"Desculpe, o atendimento por mensagens de voz está temporariamente desativado neste canal. Por favor, envie sua mensagem por texto para que eu possa te ajudar!"*
 - **E** deve retornar HTTP 200 para o CRM sem lançar exceção 500
 - **E** deve registrar log de advertência (WARNING) indicando que o áudio foi interceptado e recusado pela feature flag.
 
-### Cenário 3: Mensagem puramente textual recebida com Feature Flag de Áudio ATIVADA (`ENABLE_AUDIO_SUPPORT=True`)
+### Cenário 4: Mensagem puramente textual recebida com Feature Flag de Áudio ATIVADA (`ENABLE_AUDIO_SUPPORT=True`)
 - **Dado** que a feature flag `ENABLE_AUDIO_SUPPORT=true` está ativada
 - **Quando** o webhook `/run` receber uma mensagem contendo apenas texto (`has_audio == False`)
 - **Então** o sistema deve selecionar o modelo textual padrão do agente (`model="gemini-3.8-flash"`)
-- **E** deve orquestrar a resposta normalmente sem acionar o modelo Gemini Live.
+- **E** deve orquestrar a resposta normalmente.
 
-### Cenário 4: Mensagem combinada (áudio + texto) com Feature Flag ATIVADA
+### Cenário 5: Mensagem combinada (áudio + texto) com Feature Flag ATIVADA
 - **Dado** que `ENABLE_AUDIO_SUPPORT=true`
 - **Quando** o webhook receber mensagem com uma parte de áudio e uma parte de texto explicativo
 - **Então** o método `to_genai_content()` deve encapsular ambas as partes no mesmo objeto `Content(role="user")`
-- **E** o modelo `gemini-3.8-live` deve ser acionado com o conteúdo multimodal completo.
+- **E** o modelo multimodal turn-by-turn `gemini-3.8-flash` deve ser acionado com o conteúdo multimodal completo.
 
-### Cenário 5: Resiliência e Fallback de Modelos Live sob Erro Transitório
+### Cenário 6: Resiliência e Fallback sob Erro Transitório
 - **Dado** que `ENABLE_AUDIO_SUPPORT=true`
-- **E** o modelo principal `gemini-3.8-live` retorna erro HTTP 429 (Rate Limit) ou 503 (Overloaded)
+- **E** o modelo principal `gemini-3.8-flash` retorna erro HTTP 429 (Rate Limit) ou 503 (Overloaded)
 - **Quando** `generate_crm_response` executar a chamada
-- **Então** o gerador deve alternar automaticamente para `gemini-3.8-live-extended-thinking`
-- **E**, se persistir, para `gemini-2.0-flash`
+- **Então** o gerador deve alternar automaticamente para `gemini-3.7-flash`
+- **E**, se persistir, para `gemini-2.5-flash`
 - **E** o usuário deve receber a resposta normalmente sem quebra do fluxo conversacional.
 
-### Cenário 6: Consistência Estrutural em Todos os 4 Agentes de IA
+### Cenário 7: Consistência Estrutural em Todos os 4 Agentes de IA
 - **Dado** os repositórios `customer-support-vehicles`, `anero-cafe-support`, `duo-dermato-support` e `paralax-support`
 - **Quando** a suíte de testes `just verify` for executada em cada um
-- **Então** todos os 4 agentes devem validar a presença de `enable_audio_support` em `config.py`
+- **Então** todos os 4 agentes devem validar a presença de `enable_audio_support`, `audio_model` e `audio_fallback_models` em `config.py`
 - **E** todos os 4 agentes devem possuir testes unitários reproduzindo os cenários com flag ligada e desligada com docstrings iniciando por `Business Rule:`.
 
 ---
@@ -430,7 +519,7 @@ When users report system incidents, bugs, or questions via audio messages:
 
 ### 5.1. Estratégia de Versionamento SemVer
 - **`paralax-ia/paralax-evo-crm` (Onda 1):**
-  - Incremento SemVer Minor (`v0.5.0` ou compatível) introduzindo constantes e contratos auxiliares de feature flag.
+  - Incremento SemVer Minor (`v0.5.0` ou compatível) introduzindo constantes e contratos auxiliares de feature flag e mensagem de fallback.
   - Publicação no Google Cloud Artifact Registry.
 - **Repositórios de Agentes (Onda 2):**
   - Atualização do lockfile (`uv lock --upgrade-package paralax-evo-crm`).
@@ -439,7 +528,7 @@ When users report system incidents, bugs, or questions via audio messages:
 
 ### 5.2. Plano de Ativação Gradual (Canary Rollout)
 1. **Fase 1 (Silent Rollout):** Deploy de todos os agentes em produção com `ENABLE_AUDIO_SUPPORT=false`. Áudios recebidos recebem resposta imediata de fallback de texto amigável.
-2. **Fase 2 (Canary Brasília Automóveis):** Ativação de `ENABLE_AUDIO_SUPPORT=true` apenas para `customer-support-vehicles` para validação de volume de voz de clientes de concessionária.
+2. **Fase 2 (Canary Brasília Automóveis):** Ativação de `ENABLE_AUDIO_SUPPORT=true` apenas para `customer-support-vehicles` para validação de volume de voz de clientes de concessionária com `gemini-3.8-flash`.
 3. **Fase 3 (Expansão Ecossistema):** Ativação de `ENABLE_AUDIO_SUPPORT=true` para `anero-cafe-support`, `duo-dermato-support` e `paralax-support` sob monitoramento de métricas no Langfuse e dashboard de latência.
 ```
 
@@ -455,7 +544,7 @@ When users report system incidents, bugs, or questions via audio messages:
   - [task-5] Wave 2 in `paralax-ia/paralax-support` (Status: PENDING)
 
 ## Operator Requested Change Instruction:
-O modelo Gemini Live não funciona para o CRM
+Faltou a feature flag explícita no ArgoCD. Só paralax-support e suporte veículos devem ter o audio habilitado por enquanto
 
 ## Mandatory Refinement Rules:
 1. PRESERVE COMPLETED WORK: It is strictly forbidden to regress, remove, or modify the scope, public interface contracts, or acceptance criteria of already completed tasks (none).

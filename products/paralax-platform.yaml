@@ -13,6 +13,7 @@ repositories:
   - "evo-bot-runtime"
   - "evo-ai-crm-community"
   - "actions-workflows"
+  - "argocd"
 
 capabilities:
   - "customer-relationship-management"
