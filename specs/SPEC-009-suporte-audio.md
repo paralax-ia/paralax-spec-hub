@@ -1,27 +1,28 @@
 ---
 spec_id: SPEC-009
-title: "Suporte a Instruções de Áudio no Agente de Veículos via Modelo Gemini Live"
+title: Suporte a Instruções de Áudio no Agente de Veículos via Modelo Gemini Live
 product:
-  - customer-support-vehicles
-  - paralax-platform
+- customer-support-vehicles
+- paralax-platform
 capability: conversational-ai-agent
 scope: product-specific
-bounded_context: "IA Conversacional Multimodal & Veículos (Core Subdomain)"
+bounded_context: IA Conversacional Multimodal & Veículos (Core Subdomain)
 origin_module: customer-support-vehicles
 target_repositories:
-  - repo: paralax-ia/paralax-evo-crm
-    wave: 1
-    role: sdk
-  - repo: paralax-ia/customer-support-vehicles
-    wave: 2
-    role: ai-agent
+- repo: paralax-ia/paralax-evo-crm
+  wave: 1
+  role: sdk
+- repo: paralax-ia/customer-support-vehicles
+  wave: 2
+  role: ai-agent
 prompts:
-  - name: "vehicles/vehicle_search_agent_instruction"
-    target_repo: "paralax-ia/customer-support-vehicles"
-    file: "vehicles/prompts.py"
-    symbol: "INSTRUCTION"
-    description: "System instructions for vehicle search agent Isa, supporting WhatsApp audio notes and multimodal customer inquiries."
-status: APPROVED
+- name: vehicles/vehicle_search_agent_instruction
+  target_repo: paralax-ia/customer-support-vehicles
+  file: vehicles/prompts.py
+  symbol: INSTRUCTION
+  description: System instructions for vehicle search agent Isa, supporting WhatsApp
+    audio notes and multimodal customer inquiries.
+status: MERGED
 ---
 
 # SPEC-009: Suporte a Instruções de Áudio no Agente de Veículos via Modelo Gemini Live
