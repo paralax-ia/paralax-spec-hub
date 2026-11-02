@@ -43,7 +43,7 @@ specs:
 - id: SPEC-010
   title: Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag
     e Modelos Gemini Multimodais (Flash)
-  status: APPROVED
+  status: MERGED
   spec_path: specs/SPEC-010-suporte-audio-como-feature.md
 runtime_contracts:
   classes:

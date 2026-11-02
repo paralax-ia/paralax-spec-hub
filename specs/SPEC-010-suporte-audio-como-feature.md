@@ -56,7 +56,7 @@ prompts:
   symbol: INSTRUCTION
   description: System instructions for Paralax IT support agent, supporting user audio
     requests when audio feature flag is enabled.
-status: APPROVED
+status: MERGED
 ---
 
 # SPEC-010: Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelos Gemini Multimodais (Flash)
