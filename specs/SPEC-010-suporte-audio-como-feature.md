@@ -1,56 +1,61 @@
 ---
 spec_id: SPEC-010
-title: "Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelos Gemini Multimodais (Flash)"
+title: Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e
+  Modelos Gemini Multimodais (Flash)
 product:
-  - paralax-platform
-  - customer-support-vehicles
-  - duo-dermato-support
-  - anero-cafe-support
-  - paralax-support
+- paralax-platform
+- customer-support-vehicles
+- duo-dermato-support
+- anero-cafe-support
+- paralax-support
 capability: conversational-ai-agent
 scope: platform
-bounded_context: "Orquestração Conversacional Multimodal & Agentes de IA (Core Subdomain)"
+bounded_context: Orquestração Conversacional Multimodal & Agentes de IA (Core Subdomain)
 origin_module: paralax-evo-crm
 target_repositories:
-  - repo: paralax-ia/paralax-evo-crm
-    wave: 1
-    role: sdk
-  - repo: paralax-ia/customer-support-vehicles
-    wave: 2
-    role: ai-agent
-  - repo: paralax-ia/anero-cafe-support
-    wave: 2
-    role: ai-agent
-  - repo: paralax-ia/duo-dermato-support
-    wave: 2
-    role: ai-agent
-  - repo: paralax-ia/paralax-support
-    wave: 2
-    role: ai-agent
-  - repo: paralax-ia/argocd
-    wave: 3
-    role: gitops
+- repo: paralax-ia/paralax-evo-crm
+  wave: 1
+  role: sdk
+- repo: paralax-ia/customer-support-vehicles
+  wave: 2
+  role: ai-agent
+- repo: paralax-ia/anero-cafe-support
+  wave: 2
+  role: ai-agent
+- repo: paralax-ia/duo-dermato-support
+  wave: 2
+  role: ai-agent
+- repo: paralax-ia/paralax-support
+  wave: 2
+  role: ai-agent
+- repo: paralax-ia/argocd
+  wave: 3
+  role: gitops
 prompts:
-  - name: vehicles/vehicle_search_agent_instruction
-    target_repo: paralax-ia/customer-support-vehicles
-    file: vehicles/prompts.py
-    symbol: INSTRUCTION
-    description: "System instructions for vehicle search agent Isa, supporting WhatsApp audio notes when audio feature flag is enabled."
-  - name: anero_cafe/instruction
-    target_repo: paralax-ia/anero-cafe-support
-    file: anero_cafe/prompts.py
-    symbol: INSTRUCTION
-    description: "System instructions for Anero Cafe agent, supporting customer voice inquiries when audio feature flag is enabled."
-  - name: duo_dermato/support
-    target_repo: paralax-ia/duo-dermato-support
-    file: duo_dermato/prompts.py
-    symbol: INSTRUCTION
-    description: "System instructions for Duo Dermato clinic agent, supporting patient audio messages when audio feature flag is enabled."
-  - name: paralax/support
-    target_repo: paralax-ia/paralax-support
-    file: support/prompts.py
-    symbol: INSTRUCTION
-    description: "System instructions for Paralax IT support agent, supporting user audio requests when audio feature flag is enabled."
+- name: vehicles/vehicle_search_agent_instruction
+  target_repo: paralax-ia/customer-support-vehicles
+  file: vehicles/prompts.py
+  symbol: INSTRUCTION
+  description: System instructions for vehicle search agent Isa, supporting WhatsApp
+    audio notes when audio feature flag is enabled.
+- name: anero_cafe/instruction
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION
+  description: System instructions for Anero Cafe agent, supporting customer voice
+    inquiries when audio feature flag is enabled.
+- name: duo_dermato/support
+  target_repo: paralax-ia/duo-dermato-support
+  file: duo_dermato/prompts.py
+  symbol: INSTRUCTION
+  description: System instructions for Duo Dermato clinic agent, supporting patient
+    audio messages when audio feature flag is enabled.
+- name: paralax/support
+  target_repo: paralax-ia/paralax-support
+  file: support/prompts.py
+  symbol: INSTRUCTION
+  description: System instructions for Paralax IT support agent, supporting user audio
+    requests when audio feature flag is enabled.
 status: APPROVED
 ---
 
