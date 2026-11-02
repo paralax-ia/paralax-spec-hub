@@ -44,7 +44,7 @@ prompts:
   symbol: INSTRUCTION
   description: System instructions for Anero Cafe agent, supporting customer voice
     inquiries when audio feature flag is enabled.
-- name: duo_dermato/instruction
+- name: duo_dermato/support
   target_repo: paralax-ia/duo-dermato-support
   file: duo_dermato/prompts.py
   symbol: INSTRUCTION
