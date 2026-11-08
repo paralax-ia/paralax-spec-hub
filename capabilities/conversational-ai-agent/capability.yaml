@@ -36,4 +36,8 @@ specs:
     no Estoque da Concessionária
   status: DRAFT
   spec_path: specs/SPEC-006-informações-de-sites-externos.md
+- id: SPEC-011
+  title: Sincronização Dinâmica e Contínua de Prompts via Langfuse na Biblioteca paralax-agents-common
+  status: PROPOSED
+  spec_path: specs/SPEC-011-sincronizacao-dinamica-prompts-langfuse.md
 runtime_contracts: {}
