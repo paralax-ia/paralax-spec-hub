@@ -48,90 +48,111 @@ status: PROPOSED
 
 ---
 
-## 1. Contexto e Motivação
+## 1. Motivação e Diagnóstico
 
-### 1.1. Diagnóstico do Problema
-Nos agentes conversacionais do ecossistema Paralax IA (`customer-support-vehicles`, `duo-dermato-support`, `anero-cafe-support`, `paralax-support`), o carregamento do prompt do Langfuse é realizado de forma estática no momento da inicialização do contêiner (`create_root_agent()`):
+### 1.1. Cenário Atual
+- Em todos os agentes de IA (`customer-support-vehicles`, `duo-dermato-support`, `anero-cafe-support`, `paralax-support`), o carregamento do prompt do Langfuse ocorre de forma **estática** no momento da importação do módulo (`create_root_agent()`):
+  ```python
+  langfuse_prompt = langfuse_client.get_prompt(prompt_name)
+  instruction_prompt = langfuse_prompt.compile()
+  root_agent = Agent(instruction=instruction_prompt, ...) # Congelado em memória
+  ```
+- Se um engenheiro de prompts alterar instruções, ajustar guardrails ou promover uma nova versão com a tag `production` no Langfuse, os pods em execução no GKE continuam servindo o prompt capturado no boot.
+- Para aplicar a nova versão, hoje é necessário realizar restart manual dos Deployments no Kubernetes ou disparar um novo pipeline de release.
 
-```python
-langfuse_prompt = langfuse_client.get_prompt(prompt_name)
-instruction_prompt = langfuse_prompt.compile()
-root_agent = Agent(instruction=instruction_prompt, ...) # Congelado em memória
-```
-
-Isso gera um acoplamento indesejado:
-1. **Invalidação Tardia:** Alterações de prompt realizadas no painel do Langfuse (ex: ajustes em guardrails, novos fluxos de atendimento ou correções de comportamento) **não têm efeito** em pods em execução no GKE.
-2. **Dependência de Reinício:** A aplicação de novos prompts exige o reinício manual dos pods (`kubectl rollout restart`) ou o disparo de novo pipeline de CI/CD.
-
-### 1.2. Requisitos Mandatórios
-- **Reutilização Global (Onda 1):** A lógica de gestão de prompts dinâmicos deve residir centralmente na biblioteca compartilhada `paralax-agents-common`, disponibilizando componentes de fácil integração para qualquer agente Google ADK.
-- **Sincronização Contínua Garantida ("Sempre Sincronizado"):** Uma atualização realizada no Langfuse deve ser deterministicamente propagada para o agente em tempo de execução, combinando revalidação per-turn (pull) com invalidação sob demanda (push/webhook).
-- **Zero Latência Adicional:** A resolução de prompt em conversas em andamento não pode adicionar chamadas de rede bloqueantes ao caminho crítico do usuário.
-- **Tolerância a Falhas:** Quedas ou oscilações no Langfuse devem cair transparentemente no último prompt válido em memória ou no fallback compilado local (`INSTRUCTION`).
+### 1.2. Requisitos Mandatórios do Usuário
+1. **Reutilização via Biblioteca Comum:** A lógica de sincronização, cache, resolução e endpoints de gerenciamento deve residir na biblioteca compartilhada `paralax-agents-common` (`paralax.agents.common.prompts`), e não isolada no código de um único agente.
+2. **Garantia de Sincronização Contínua ("Sempre Sincronizado"):** Uma atualização realizada no Langfuse não pode depender exclusivamente de intervenção humana ou expiração tardia de caches. O agente deve refletir deterministicamente as atualizações em tempo de execução.
+3. **Zero Latência Adicional:** A resolução de prompt em conversas em andamento não pode adicionar chamadas de rede bloqueantes ao caminho crítico do usuário.
+4. **Tolerância a Falhas:** Quedas ou oscilações no Langfuse devem cair transparentemente no último prompt válido em memória ou no fallback compilado local (`INSTRUCTION`).
 
 ---
 
-## 2. Arquitetura da Solução
+## 2. Desenho Arquitetural da Solução
 
-Adotaremos a **Estratégia de Sincronização em Dupla Camada (Push + Pull Híbrido)**:
+Para assegurar que as atualizações sejam **sempre** sincronizadas sem degradar a latência das mensagens, a biblioteca `paralax-agents-common` implementará uma **Estratégia de Sincronização em Dupla Camada (Push + Pull Híbrido)**:
 
 ```mermaid
 flowchart TD
     subgraph Langfuse Cloud
         UI["Langfuse UI / API"] -->|Publica nova versão| LF_PROMPTS["Prompt: vehicles/vehicle_search_agent_instruction"]
-        LF_PROMPTS -.->|Webhook de publicação| WH_EVENT["Event: prompt.updated"]
+        LF_PROMPTS -.->|Webhook de publicação (opcional)| WH_EVENT["Event: prompt.updated"]
     end
 
-    subgraph paralax-agents-common [Onda 1: paralax-agents-common]
+    subgraph paralax-agents-common [Biblioteca Reutilizável: paralax-agents-common]
         DPM["DynamicPromptManager"]
         CACHE["Cache em Memória (Stale-While-Revalidate)"]
         WH_ROUTER["PromptManagementRouter (FastAPI)"]
         
         DPM <--> CACHE
-        WH_ROUTER -->|refresh(force=True)| DPM
+        WH_ROUTER -->|force_refresh()| DPM
     end
 
-    subgraph customer-support-vehicles [Onda 2: Consumidor Piloto]
-        MSG["Mensagem do Usuário"] --> CRM_ROUTER["Router CRM (/run)"]
+    subgraph customer-support-vehicles [Agente Consumidor (Onda 2)]
+        MSG["Mensagem do Usuário (WhatsApp/Web)"] --> CRM_ROUTER["Router CRM (/run)"]
         CRM_ROUTER --> RUNNER["Google ADK Runner"]
         RUNNER --> AGENT["Google ADK Agent"]
         
         AGENT -->|instruction=prompt_manager.get_instruction (Callable)| DPM
         
-        DPM -->|1. Retorna prompt em cache| AGENT
-        DPM -.->|2. Se expirado: revalidação em background| LF_PROMPTS
+        DPM -->|1. Retorna prompt em cache imediatamente| AGENT
+        DPM -.->|2. Se expirado ou invalidado: fetch em background| LF_PROMPTS
         
         WH_EVENT -.->|Push imediato| WH_ROUTER
-        ADMIN["POST /prompts/refresh"] -->|Invalidação manual| WH_ROUTER
+        ADMIN["POST /prompts/refresh"] -->|Invalidação manual sob demanda| WH_ROUTER
     end
 ```
 
-### 2.1. Camada Pull (Per-Turn Dynamic Instruction)
-O Google ADK suporta nativamente instruções dinâmicas através da assinatura:
-```python
-instruction: Union[str, Callable[[ReadonlyContext], Union[str, Awaitable[str]]]]
-```
-Em cada turno/mensagem processada pelo `Runner`, o ADK invoca `canonical_instruction(ctx)`, que chama `dynamic_prompt_manager.get_instruction(ctx)`.
+---
 
-### 2.2. Stale-While-Revalidate com Cache TTL
-O `DynamicPromptManager` delega para o SDK do Langfuse com `cache_ttl_seconds` configurável (padrão: 120s):
-- Se o cache está válido: retorno imediato em memória (~0.05ms).
-- Se o cache expirou: o SDK entrega a versão em memória instantaneamente e dispara thread em background para buscar a nova versão.
-- Falha de rede: mantém a versão ativa sem interromper a sessão do usuário.
+## 3. Os 3 Pilares de Garantia de Sincronização
 
-### 2.3. Camada Push (Invalidação Imediata via API/Webhook)
-O módulo `paralax.agents.common.routers` exporta uma factory de router FastAPI:
-- **`POST /prompts/refresh`**: Invalida o cache local (`clear_prompt_cache()`) e sincroniza imediatamente com o Langfuse. Protegido via `X-Agent-Api-Key` ou Bearer Token.
-- **`GET /prompts/status`**: Retorna telemetria da versão ativa, origem (`remote`/`fallback`), labels e timestamp da última sincronização.
+### Pilar 1: Camada Pull Dinâmica por Turno via Callable no Google ADK
+- O Google ADK suporta nativamente instruções dinâmicas através de `Callable[[ReadonlyContext], Union[str, Awaitable[str]]]`.
+- Em cada turno/mensagem processada pelo `Runner`, o ADK invoca `canonical_instruction(ctx)`, delegando para `prompt_manager.get_instruction(ctx)`.
+- Isso elimina o congelamento do prompt na inicialização do contêiner.
+
+### Pilar 2: Stale-While-Revalidate com Background Refresh (Latência Zero)
+- O `DynamicPromptManager` configura o cache interno do SDK do Langfuse com um TTL curto e seguro (`cache_ttl_seconds`, padrão: 60s a 120s, configurável via ambiente).
+- Ao expirar o TTL:
+  1. A requisição do usuário em andamento recebe imediatamente a versão em cache (zero latência adicional).
+  2. Uma thread em segundo plano atualiza o cache com a versão mais recente publicada no Langfuse.
+  3. Todas as mensagens subsequentes já utilizam o novo prompt.
+- **Fallback Resiliente:** Em caso de oscilação ou indisponibilidade do Langfuse, o `DynamicPromptManager` mantém a última versão válida em memória ou recorre ao fallback estático do código (`INSTRUCTION`). O atendimento ao cliente nunca é interrompido.
+
+### Pilar 3: Camada Push Imediata via API/Webhook de Sincronização
+- A biblioteca `paralax-agents-common` fornecerá um roteador FastAPI pronto para inclusão: `create_prompt_management_router(prompt_manager)`.
+- Expõe dois endpoints padronizados nos agentes:
+  - **`POST /prompts/refresh`**: Limpa imediatamente o cache em memória e baixa a versão mais recente do Langfuse (resposta síncrona com os metadados da nova versão). Protegido via `X-Agent-Api-Key` ou `AGENT_API_KEY`.
+  - **`GET /prompts/status`**: Retorna a telemetria do prompt em execução: versão ativa, labels (`production`), comprimento, timestamp da última sincronização e origem (`remote` ou `fallback`).
+- Permite que ferramentas de CI/CD, webhooks do Langfuse ou operadores humanos forcem a propagação instantânea em todos os pods sem esperar qualquer TTL.
 
 ---
 
-## 3. Contratos e Interfaces da Biblioteca
+## 4. Especificação de Código na Biblioteca `paralax-agents-common`
 
-### 3.1. `paralax.agents.common.prompts.DynamicPromptManager`
+### 4.1. Módulo `paralax.agents.common.prompts`
+
 ```python
+# paralax-agents-common/paralax/agents/common/prompts.py
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Any, Callable, Optional
+
+from langfuse import Langfuse
+from langfuse.api.core import ApiError
+
+logger = logging.getLogger(__name__)
+
+
 class DynamicPromptManager:
-    """Gerenciador de prompts dinâmicos com cache e fallback para o Google ADK."""
+    """Gerenciador de prompts dinâmicos e contínuos via Langfuse para o Google ADK.
+    
+    Garante sincronização automática de prompts atualizados em produção, combinando
+    resolução por turno com cache stale-while-revalidate e invalidação sob demanda.
+    """
 
     def __init__(
         self,
@@ -141,90 +162,214 @@ class DynamicPromptManager:
         cache_ttl_seconds: int = 120,
         label: str = "production",
     ) -> None:
-        ...
+        self.prompt_name = prompt_name
+        self.fallback_instruction = fallback_instruction
+        self._langfuse_client = langfuse_client
+        self.cache_ttl_seconds = cache_ttl_seconds
+        self.label = label
+        
+        self.active_version: Optional[int] = None
+        self.last_sync_timestamp: Optional[datetime] = None
+        self.source: str = "fallback"
+        self._cached_prompt_text: str = fallback_instruction
+
+        # Pré-aquecimento inicial (fail-safe)
+        self.refresh()
 
     def get_instruction(self, ctx: Any = None) -> str:
-        """Retorna o texto de instrução resolvido, com fallback resiliente."""
-        ...
+        """Callable compatível com Agent.instruction do Google ADK."""
+        if not self._langfuse_client:
+            return self.fallback_instruction
+
+        try:
+            prompt_obj = self._langfuse_client.get_prompt(
+                name=self.prompt_name,
+                label=self.label,
+                cache_ttl_seconds=self.cache_ttl_seconds,
+                fallback=self.fallback_instruction,
+            )
+            self._cached_prompt_text = prompt_obj.compile()
+            self.active_version = getattr(prompt_obj, "version", None)
+            self.source = "remote"
+            self.last_sync_timestamp = datetime.now(timezone.utc)
+            return self._cached_prompt_text
+        except Exception as exc:
+            logger.warning(
+                "Falha transitória ao resolver prompt dinâmico '%s': %s. Usando versão em cache.",
+                self.prompt_name,
+                exc,
+            )
+            return self._cached_prompt_text
 
     def refresh(self, force: bool = True) -> dict[str, Any]:
         """Força limpeza de cache e recarregamento síncrono da versão mais recente."""
-        ...
+        if not self._langfuse_client:
+            return self.get_status()
+
+        try:
+            if force and hasattr(self._langfuse_client, "clear_prompt_cache"):
+                self._langfuse_client.clear_prompt_cache()
+
+            prompt_obj = self._langfuse_client.get_prompt(
+                name=self.prompt_name,
+                label=self.label,
+                cache_ttl_seconds=0 if force else self.cache_ttl_seconds,
+            )
+            self._cached_prompt_text = prompt_obj.compile()
+            self.active_version = getattr(prompt_obj, "version", None)
+            self.source = "remote"
+            self.last_sync_timestamp = datetime.now(timezone.utc)
+            logger.info(
+                "Prompt '%s' sincronizado com sucesso (versão: %s, label: %s)",
+                self.prompt_name,
+                self.active_version,
+                self.label,
+            )
+        except Exception as exc:
+            logger.error(
+                "Não foi possível sincronizar o prompt '%s' com o Langfuse: %s",
+                self.prompt_name,
+                exc,
+            )
+        return self.get_status()
 
     def get_status(self) -> dict[str, Any]:
-        """Retorna telemetria sobre a versão e estado do prompt."""
-        ...
+        """Retorna telemetria da versão ativa do prompt."""
+        return {
+            "prompt_name": self.prompt_name,
+            "version": self.active_version,
+            "label": self.label,
+            "source": self.source,
+            "length": len(self._cached_prompt_text),
+            "last_sync_utc": (
+                self.last_sync_timestamp.isoformat()
+                if self.last_sync_timestamp
+                else None
+            ),
+        }
 ```
 
-### 3.2. `paralax.agents.common.routers.create_prompt_management_router`
+### 4.2. Roteador de Gerenciamento FastAPI Reutilizável
+
 ```python
+# paralax-agents-common/paralax/agents/common/routers.py
+from fastapi import APIRouter, Header, HTTPException, status
+from typing import Optional
+
 def create_prompt_management_router(
-    prompt_manager: DynamicPromptManager,
+    prompt_manager: Any,
     expected_api_key: Optional[str] = None,
 ) -> APIRouter:
-    """Cria router FastAPI com endpoints /prompts/refresh e /prompts/status."""
-    ...
+    router = APIRouter(prefix="/prompts", tags=["Prompts"])
+
+    def verify_auth(x_agent_api_key: Optional[str] = Header(None)) -> None:
+        if expected_api_key and x_agent_api_key != expected_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing API Key for prompt management.",
+            )
+
+    @router.post("/refresh")
+    def refresh_prompt(x_agent_api_key: Optional[str] = Header(None)):
+        verify_auth(x_agent_api_key)
+        return prompt_manager.refresh(force=True)
+
+    @router.get("/status")
+    def prompt_status():
+        return prompt_manager.get_status()
+
+    return router
 ```
 
 ---
 
-## 4. Plano de Execução em Ondas Topológicas
+## 5. Como o Agente de Veículos (`customer-support-vehicles`) Consumirá a Lib
 
-### 🌊 Onda 1: Shared Library (`paralax-ia/paralax-agents-common`)
-- **Meta:** Implementar `DynamicPromptManager` e `create_prompt_management_router` com 100% de cobertura de testes e publicar nova versão no Artifact Registry.
-- **Tarefas:**
-  1. Criar branch `feat/dynamic-prompt-manager` a partir de `main`.
-  2. Implementar `paralax/agents/common/prompts.py`.
-  3. Implementar `paralax/agents/common/routers.py`.
-  4. Expor novos módulos em `paralax/agents/common/__init__.py`.
-  5. Criar suíte de testes unitários `tests/unit/test_dynamic_prompt_manager.py`:
-     - Resolução dinâmica e fallback quando Langfuse é None.
-     - Resolução com mock de Langfuse (`get_prompt` com label `production`).
-     - Expiração de TTL e comportamento de revalidação.
-     - Comportamento de `refresh(force=True)`.
-     - Endpoints `/prompts/refresh` e `/prompts/status` com e sem autenticação de API Key.
-  6. Validar com `make test` e `make lint`.
-  7. Abrir PR via GitHub CLI (`gh pr create`).
-  8. Gerar release de patch (`make release patch`) -> Publicar `0.0.17` no `prod-python-registry`.
+### 5.1. Em `vehicles/agent.py`
+```python
+from paralax.agents.common.prompts import DynamicPromptManager
+from paralax.agents.common.tracing import get_langfuse
+from .prompts import INSTRUCTION
 
----
+prompt_manager = DynamicPromptManager(
+    prompt_name="vehicles/vehicle_search_agent_instruction",
+    fallback_instruction=INSTRUCTION,
+    langfuse_client=get_langfuse(),
+    cache_ttl_seconds=configs.LANGFUSE_PROMPT_CACHE_TTL_SECONDS,
+    label="production",
+)
 
-### 🌊 Onda 2: Consumidor Piloto (`paralax-ia/customer-support-vehicles`)
-- **Meta:** Adotar a versão `0.0.17` da lib, plugar a instrução dinâmica e expor os endpoints de atualização no agente de veículos.
-- **Tarefas:**
-  1. Criar branch `feat/dynamic-prompt-sync` a partir de `main`.
-  2. Atualizar `pyproject.toml` para `paralax-agents-common>=0.0.17` e sincronizar `uv.lock`.
-  3. Adicionar em `vehicles/config.py`:
-     - `LANGFUSE_PROMPT_CACHE_TTL_SECONDS: int = Field(default=120, ...)`
-     - `LANGFUSE_PROMPT_LABEL: str = Field(default="production", ...)`
-  4. Refatorar `vehicles/agent.py`:
-     - Instanciar `DynamicPromptManager` com `prompt_name="vehicles/vehicle_search_agent_instruction"` e `fallback_instruction=INSTRUCTION`.
-     - Conectar `instruction=prompt_manager.get_instruction` no `Agent(...)`.
-  5. Acoplar o router em `vehicles/routers/crm.py` ou `vehicles/main.py`:
-     - `app.include_router(create_prompt_management_router(prompt_manager, config.AGENT_API_KEY))`.
-  6. Criar testes unitários em `tests/unit/test_dynamic_prompt_integration.py`:
-     - Testar que `root_agent.instruction` é um callable que resolve para a versão ativa.
-     - Testar endpoint `POST /prompts/refresh` atualizando o prompt em memória.
-  7. Validar com `uv run pytest tests/unit`.
-  8. Abrir PR via GitHub CLI (`gh pr create`).
+root_agent = Agent(
+    model=configs.agent_settings.model,
+    instruction=prompt_manager.get_instruction,  # Callable nativo do Google ADK
+    name=configs.agent_settings.name,
+    tools=[...],
+    ...
+)
+```
 
----
+### 5.2. Em `vehicles/main.py` ou `vehicles/routers/crm.py`
+```python
+from paralax.agents.common.routers import create_prompt_management_router
+from vehicles.agent import prompt_manager
+from vehicles.config import config
 
-### 🌊 Onda 3: Rollout nos Demais Agentes da Frota
-- **Meta:** Estender a padronização para os outros 3 agentes conversacionais.
-- **Tarefas:**
-  1. **`duo-dermato-support`:** Atualizar para `paralax-agents-common>=0.0.17`, plugar `DynamicPromptManager` para `duo_dermato/support`.
-  2. **`anero-cafe-support`:** Atualizar para `paralax-agents-common>=0.0.17`, plugar `DynamicPromptManager` para `anero_cafe/instruction`.
-  3. **`paralax-support`:** Atualizar para `paralax-agents-common>=0.0.17`, plugar `DynamicPromptManager` para `paralax/support`.
-  4. Abrir PRs e validar integração contínua.
+# Acopla os endpoints /prompts/refresh e /prompts/status com proteção de API Key
+app.include_router(
+    create_prompt_management_router(
+        prompt_manager=prompt_manager,
+        expected_api_key=config.AGENT_API_KEY,
+    )
+)
+```
 
 ---
 
-## 5. Critérios de Aceite e Invariantes de Qualidade
+## 6. Roteiro de Execução em Ondas Topológicas
+
+### 🌊 Onda 1: Implementação e Release na Biblioteca Comum (`paralax-agents-common`)
+1. **Branch:** Criar branch `feat/dynamic-prompt-manager` em `paralax-agents-common`.
+2. **Código:**
+   - Criar `paralax/agents/common/prompts.py` (`DynamicPromptManager`).
+   - Criar `paralax/agents/common/routers.py` (`create_prompt_management_router`).
+   - Exportar os símbolos em `paralax/agents/common/__init__.py`.
+3. **Testes Unitários:**
+   - `tests/unit/test_dynamic_prompt_manager.py`:
+     * Testar resolução dinâmica inicial via Langfuse.
+     * Testar expiração de TTL e background revalidation.
+     * Testar fallback em falha de conexão com Langfuse.
+     * Testar endpoint `POST /prompts/refresh` com autenticação e invalidação forçada.
+     * Testar compatibilidade de assinatura com Google ADK `Callable[[ReadonlyContext], str]`.
+4. **Validação:** Rodar `make test` e `make lint`.
+5. **Commit e Pull Request:** Abrir PR no repositório `paralax-agents-common`.
+6. **Release Oficial:** Gerar nova versão `0.0.17` (`make release patch`) e publicação no Artifact Registry oficial.
+
+---
+
+### 🌊 Onda 2: Integração e Homologação no Agente de Veículos (`customer-support-vehicles`)
+1. **Branch:** Criar branch `feat/dynamic-prompt-sync` em `customer-support-vehicles`.
+2. **Atualização de Dependência:** Declarar `paralax-agents-common>=0.0.17` no `pyproject.toml` e sincronizar com `uv sync`.
+3. **Configuração:** Adicionar `LANGFUSE_PROMPT_CACHE_TTL_SECONDS: int = Field(default=120, ...)` e `LANGFUSE_PROMPT_LABEL: str = Field(default="production", ...)` em `vehicles/config.py`.
+4. **Instrução Dinâmica:** Plugar `prompt_manager.get_instruction` em `vehicles/agent.py`.
+5. **Endpoints de Invalidação:** Registrar `create_prompt_management_router` no app FastAPI.
+6. **Testes do Agente:** Validar toda a suíte de testes do agente de veículos com mock de Langfuse e testes de integração.
+7. **Commit e Pull Request:** Submeter PR no GitHub via `gh pr create`.
+
+---
+
+### 🌊 Onda 3: Expansão Contínua para os Demais Agentes
+- Replicar o consumo da versão `0.0.17` de `paralax-agents-common` em:
+  - `duo-dermato-support` (`duo_dermato/support`)
+  - `anero-cafe-support` (`anero_cafe/instruction`)
+  - `paralax-support` (`paralax/support`)
+
+---
+
+## 7. Critérios de Aceite e Invariantes de Qualidade
 
 1. **Invariante de Não-Interrupção:** Nenhuma falha de rede do Langfuse pode resultar em HTTP 500 para a mensagem do usuário; o agente deve sempre recorrer ao fallback com log de warning.
 2. **Invariante de Sincronização Dinâmica:** Após publicação de nova versão do prompt com label `production` no Langfuse:
    - Uma chamada a `POST /prompts/refresh` deve atualizar a instrução na próxima requisição do usuário com 0 segundos de delay.
-   - Mesmo sem chamada ao endpoint de refresh, a nova versão deve passar a ser servida automaticamente assim que o `cache_ttl_seconds` expirar.
+   - Mesmo sem chamada ao endpoint de refresh, a nova versão deve passar a ser servida automaticamente assim que o `cache_ttl_seconds` expirar via background revalidation.
 3. **Compatibilidade com Ondas Topológicas:** Nenhuma alteração no agente consome pacotes via path local ou symlink; o consumo é estritamente via wheel oficial publicada.
 4. **Governança de Código:** PEP 8 estrito, Google docstrings, sem funções aninhadas, sem try-except aninhados, isort e tipagem estrita via `pyright`/`mypy`.
