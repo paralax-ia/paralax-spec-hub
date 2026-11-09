@@ -27,7 +27,7 @@ target_repositories:
 - repo: paralax-ia/paralax-support
   wave: 3
   role: ai-agent
-status: PROPOSED
+status: MERGED
 ---
 
 # SPEC-011: Sincronização Dinâmica e Contínua de Prompts via Langfuse na Biblioteca `paralax-agents-common`
@@ -36,7 +36,7 @@ status: PROPOSED
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
 > **Scope:** Platform  
 > **Bounded Context:** Orquestração Conversacional e Resiliência de Agentes de IA (Core Subdomain)  
-> **Status:** PROPOSED  
+> **Status:** MERGED  
 > **Autor:** Eduardo F. Santos & Antigravity  
 > **Data de Criação:** 2026-11-08  
 > **Repositórios Alvo:**
@@ -373,3 +373,33 @@ app.include_router(
    - Mesmo sem chamada ao endpoint de refresh, a nova versão deve passar a ser servida automaticamente assim que o `cache_ttl_seconds` expirar via background revalidation.
 3. **Compatibilidade com Ondas Topológicas:** Nenhuma alteração no agente consome pacotes via path local ou symlink; o consumo é estritamente via wheel oficial publicada.
 4. **Governança de Código:** PEP 8 estrito, Google docstrings, sem funções aninhadas, sem try-except aninhados, isort e tipagem estrita via `pyright`/`mypy`.
+
+---
+
+## 8. Evidências de Execução e Conclusão das Ondas (Status: MERGED)
+
+Todas as três ondas foram concluídas, testadas e integradas à branch `main` dos respectivos repositórios:
+
+### 🌊 Onda 1: Shared Library (`paralax-ia/paralax-agents-common`)
+- **Implementação:** Criação de `DynamicPromptManager` com background revalidation, suporte a callable per-turn do Google ADK e roteador FastAPI (`create_prompt_management_router`).
+- **Testes Unitários:** 6 novos testes em `tests/unit/test_dynamic_prompt_manager.py` aprovados com 100% de cobertura.
+- **Release:** Publicada a versão oficial `paralax-agents-common==0.0.17` no Google Cloud Artifact Registry (`prod-python-registry`).
+
+### 🌊 Onda 2: Consumidor Piloto (`paralax-ia/customer-support-vehicles`)
+- **Integração:** Consumo declarativo de `paralax-agents-common>=0.0.17`, injeção de `DynamicPromptManager` no `vehicles/vehicle_search_agent_instruction` e montagem das rotas `/prompts/refresh` e `/prompts/status`.
+- **Testes de Integração:** 7 testes em `tests/unit/test_dynamic_prompt_integration.py` aprovados.
+- **Merge:** Pull Request [#77](https://github.com/paralax-ia/customer-support-vehicles/pull/77) validado e mergeado na `main`.
+
+### 🌊 Onda 3: Rollout da Frota (`duo-dermato-support`, `paralax-support`, `anero-cafe-support`)
+- **`duo-dermato-support`:**
+  - Prompt: `duo_dermato/support`.
+  - Testes: 32 testes unitários aprovados, 0 erros no pyright/ruff.
+  - Merge: Pull Request [#18](https://github.com/paralax-ia/duo-dermato-support/pull/18) mergeado na `main`.
+- **`paralax-support`:**
+  - Prompt: `paralax/support`.
+  - Testes: 87 testes unitários aprovados, 0 erros no pyright/ruff.
+  - Merge: Pull Request [#28](https://github.com/paralax-ia/paralax-support/pull/28) mergeado na `main`.
+- **`anero-cafe-support`:**
+  - Prompt: `anero_cafe/instruction`.
+  - Testes: 39 testes unitários aprovados, 0 erros no pyright/ruff.
+  - Merge: Pull Request [#17](https://github.com/paralax-ia/anero-cafe-support/pull/17) mergeado na `main`.
