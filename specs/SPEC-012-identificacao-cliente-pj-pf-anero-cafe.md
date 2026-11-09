@@ -1,219 +1,176 @@
 ---
 spec_id: SPEC-012
-title: "Identificação de Cliente e Classificação PJ/PF com Heurística em Três Etapas - anero-cafe-support"
+title: "Identificação de Linha PJ/PF, Roteamento Multi-Agente e Integração CRM via paralax-evo-crm"
 product:
   - anero-cafe-support
+  - paralax-platform
 capability: customer-relationship-management
-scope: product
-bounded_context: "CRM (Supporting Subdomain) / Identificação de Clientes"
-origin_module: anero-cafe-support
+scope: platform
+bounded_context: "CRM (Supporting Subdomain) / Identificação de Clientes & Orquestração Multi-Agente"
+origin_module: paralax-evo-crm
 target_repositories:
-  - repo: paralax-ia/anero-cafe-support
+  - repo: paralax-ia/paralax-evo-crm
     wave: 1
+    role: sdk
+  - repo: paralax-ia/anero-cafe-support
+    wave: 2
     role: ai-agent
 status: DRAFT
 ---
 
-# SPEC-012: Identificação de Cliente e Classificação PJ/PF com Heurística em Três Etapas - anero-cafe-support
+# SPEC-012: Identificação de Linha PJ/PF, Roteamento Multi-Agente e Integração CRM via `paralax-evo-crm`
 
-> **Product:** [`anero-cafe-support`](../products/anero-cafe-support.yaml)  
+> **Product:** [`anero-cafe-support`](../products/anero-cafe-support.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)  
 > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
-> **Scope:** Product (`anero-cafe-support`)  
-> **Bounded Context:** CRM (Supporting Subdomain) / Identificação de Clientes  
-> **Status:** DRAFT  
+> **Scope:** Platform / Multi-repo (Onda 1: SDK `paralax-evo-crm`; Onda 2: Agente `anero-cafe-support`)  
+> **Bounded Context:** CRM (Supporting Subdomain) / Identificação e Gestão de Contatos  
+> **Status:** DRAFT (Aguardando Aprovação)  
 > **Autor:** Antigravity & Eduardo F. Santos  
 > **Data de Criação:** 2026-11-09  
 > **Repositórios Alvo:**  
-> - `paralax-ia/anero-cafe-support` (Onda 1 - Agente de IA)
+> - `paralax-ia/paralax-evo-crm` (Onda 1 - SDK Client & Modelos)  
+> - `paralax-ia/anero-cafe-support` (Onda 2 - Agentes Especializados & Orquestração)  
 
 ---
 
 ## 1. Contexto e Motivação
 
-O concierge virtual do **Anero Café** atende diariamente tanto clientes consumidores finais (Pessoa Física - PF) em busca de cafés especiais para consumo próprio, quanto contas corporativas e empresas parceiras (Pessoa Jurídica - PJ) interessadas em compras em lote, café corporativo para escritórios, consultorias e parcerias comerciais.
+O atendimento digital do **Anero Café** precisa segmentar seus fluxos de atendimento com base na titularidade da linha e no perfil do interlocutor, roteando para **três agentes especializados de IA** a partir da identificação no CRM e metadados de canal.
 
-Para garantir um tratamento adequado, roteamento assertivo de pedidos, correta emissão fiscal e organização da base de contatos no CRM, é indispensável que o agente determine com precisão se o interlocutor é **Pessoa Jurídica (PJ)** ou **Pessoa Física (PF)**.
-
-A identificação deve seguir estritamente uma **heurística sequencial em três etapas**:
-1. **Verificação no Cadastro do CRM:** Se o contato já for cadastrado, verificar se possui CNPJ informado (`tax_id` com 14 dígitos ou nos atributos) ou se já está classificado como Pessoa Jurídica (`type == 'company'`).
-2. **Verificação na Linha Telefônica:** Caso a primeira verificação não identifique o cliente como PJ, verificar se a informação de CNPJ existe vinculada à linha telefônica (em metadados de canal/inbox, titularidade ou perfil comercial do número).
-3. **Confirmação Ativa com o Cliente:** Caso ambas as fontes anteriores não possuam a informação, o agente deve cordialmente solicitar que o cliente confirme se é PJ ou PF, fornecendo o seu CNPJ ou CPF, persistindo imediatamente o documento e a classificação no registro do contato no CRM.
-
----
-
-## 2. Escopo e Repositórios Afetados
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        ONDA 1: anero-cafe-support                      │
-├────────────────────────────────────────────────────────────────────────┤
-│ • Serviço de Identificação: `anero_cafe/services/customer_id.py`       │
-│   - Sanitização e validação de CPF (11 dígitos) e CNPJ (14 dígitos)    │
-│   - Heurística em 3 etapas (cadastro CRM -> linha telefônica -> ativo)  │
-│   - Atualização do contato no CRM via REST (`PATCH /api/v1/contacts`)  │
-│                                                                        │
-│ • Ferramentas ADK: `anero_cafe/tools/customer_identification.py`       │
-│   - `save_customer_identification`: tool para persistir CPF/CNPJ       │
-│                                                                        │
-│ • Callbacks & Contexto de Sessão: `shared_libraries/callbacks.py`      │
-│   - `before_agent`: executa heurística e popula `session.state`        │
-│   - `before_model`: instrui o LLM dinamicamente se faltar documento    │
-│                                                                        │
-│ • Prompt do Sistema: `anero_cafe/prompts.py`                           │
-│   - Diretrizes de tom e abordagem cordial para solicitação de CPF/CNPJ │
-│                                                                        │
-│ • Testes Unitários: `tests/unit/` com TDD estrito e `Business Rule:`   │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-- [ ] **[Onda 1] `paralax-ia/anero-cafe-support`:**
-  - Implementação completa da heurística de identificação de cliente.
-  - Testes unitários cobrindo todos os ramos da heurística.
-  - Zero alteração no código legado do CRM (`evo-ai-crm-community`).
+### 1.1. Heurística de Entrada e Classificação da Linha:
+Quando a linha manda mensagem, o sistema executa a seguinte sequência:
+1. **Verificação de Cadastro no CRM:**
+   - Verifica se a linha/contato está cadastrada no CRM (`crm_api.get_contact` / `get_contact_by_phone`).
+   - Se cadastrada, verifica se possui CPF ou CNPJ registrado (`tax_id` ou atributos).
+2. **Identificação de "CNPJ Cadastrado":**
+   - Se existir contato do tipo CNPJ (ex: `tax_id` com 14 dígitos ou `type == 'company'`), identifica o interlocutor como **CNPJ Cadastrado**.
+3. **Identificação pela Linha Telefônica ("CNPJ Não Cadastrado"):**
+   - Caso NÃO seja um CNPJ cadastrado, tenta descobrir pela linha se existe um CNPJ vinculado (metadados do canal, WhatsApp Business Profile, cadastro da operadora).
+   - Em caso positivo: identifica a linha como **CNPJ Não Cadastrado**.
+   - Em caso negativo: identifica como **Atendimento Normal (Pessoa Física / Não Identificado)**.
 
 ---
 
-## 3. Contratos de Interface
+## 2. Arquitetura dos Três Agentes de IA
 
-### 3.1. Modelos de Domínio Pydantic
+A partir da classificação da linha e do fluxo conversacional, operam **três agentes especializados**:
 
-```python
-from enum import Enum
-from pydantic import BaseModel, Field
-
-
-class CustomerClassification(str, Enum):
-    """Classificação do tipo de cliente."""
-    PJ = "PJ"  # Pessoa Jurídica
-    PF = "PF"  # Pessoa Física
-    UNKNOWN = "UNKNOWN"  # Não identificado
-
-
-class IdentificationSource(str, Enum):
-    """Origem que determinou a identificação do cliente."""
-    CRM_REGISTRATION = "crm_registration"
-    PHONE_LINE = "phone_line"
-    CUSTOMER_CONFIRMATION = "customer_confirmation"
-    PENDING = "pending"
-
-
-class IdentificationStatus(BaseModel):
-    """Estado consolidado da identificação do cliente."""
-    classification: CustomerClassification = CustomerClassification.UNKNOWN
-    tax_id: str | None = None
-    source: IdentificationSource = IdentificationSource.PENDING
-    needs_confirmation: bool = True
-    details: str = ""
+```
+                       ┌─────────────────────────────────────────┐
+                       │      Mensagem Recebida da Linha         │
+                       └────────────────────┬────────────────────┘
+                                            │
+                                            ▼
+                       ┌─────────────────────────────────────────┐
+                       │  Heurística de Linha (via paralax-crm)  │
+                       │   • Está cadastrado no CRM?             │
+                       │   • Tem CPF ou CNPJ?                    │
+                       │   • Há CNPJ vinculado à linha?          │
+                       └──────┬───────────────────────────┬──────┘
+                              │                           │
+          [CNPJ Cadastrado]   │                           │ [Demais Casos: Não Cadastrado
+                              │                           │  ou Linha com CNPJ não cadastrado]
+                              ▼                           ▼
+                 ┌─────────────────────────┐ ┌─────────────────────────┐
+                 │        AGENTE 1         │ │        AGENTE 2         │
+                 │   Clientes Cadastrados  │ │   Atendimento Normal    │
+                 │          CNPJ           │ │   (Pessoa Física/Menu)  │
+                 │  • Pedidos corporativos │ └────────────┬────────────┘
+                 │  • Faturamento B2B      │              │
+                 │  • Tabela PJ cadastrada │              │ Durante a conversa identifica
+                 └─────────────────────────┘              │ que usuário se trata de empresa
+                                                          │ (ex: pedido B2B, confirmação CNPJ)
+                                                          ▼
+                                             ┌─────────────────────────┐
+                                             │        AGENTE 3         │
+                                             │   Empresa Identificada  │
+                                             │   (Onboarding B2B)      │
+                                             │  • Qualificação de lead │
+                                             │  • Coleta/Valida CNPJ   │
+                                             │  • Salva contato no CRM │
+                                             └─────────────────────────┘
 ```
 
-### 3.2. Funções de Serviço
-
-```python
-def sanitize_tax_id(tax_id: str | None) -> str:
-    """Remove caracteres não numéricos de CPF ou CNPJ."""
-    ...
-
-def validate_tax_id(tax_id: str) -> tuple[bool, CustomerClassification]:
-    """Valida tamanho e formato: 11 dígitos -> PF (CPF); 14 dígitos -> PJ (CNPJ)."""
-    ...
-
-def evaluate_customer_identification(
-    contact_data: dict[str, Any] | None,
-    line_metadata: dict[str, Any] | None = None,
-) -> IdentificationStatus:
-    """Executa os passos 1 e 2 da heurística de identificação."""
-    ...
-
-async def update_crm_contact_tax_id(
-    crm_url: str,
-    crm_token: str,
-    contact_id: str,
-    tax_id: str,
-    classification: CustomerClassification,
-) -> dict[str, Any]:
-    """Persiste tax_id e type ('company' ou 'person') no CRM."""
-    ...
-```
-
-### 3.3. Ferramenta ADK (Tool)
-
-```python
-async def save_customer_identification(
-    ctx: ToolContext,
-    tax_id: str,
-) -> dict[str, Any]:
-    """Salva a informação de CPF ou CNPJ confirmada pelo cliente no contato do CRM.
-    
-    Args:
-        ctx: Contexto da ferramenta contendo a sessão.
-        tax_id: Número de CPF (11 dígitos) ou CNPJ (14 dígitos) informado pelo cliente.
-        
-    Returns:
-        Dicionário com o resultado da persistência e classificação atribuída.
-    """
-    ...
-```
+### Detalhamento dos Agentes:
+1. **Agente 1 — Clientes Cadastrados CNPJ (`B2BCadastradoAgent`):**
+   - **Gatilho de Ativação:** Linha reconhecida como **"CNPJ Cadastrado"** logo na entrada.
+   - **Escopo:** Atendimento prioritário a empresas parceiras já registradas no CRM (recorrência de grãos corporativos, contratos de locação/comodato de máquinas de café espresso, emissão de segundas vias de nota fiscal e faturamento).
+2. **Agente 2 — Atendimento Normal (`AtendimentoNormalAgent`):**
+   - **Gatilho de Ativação:** Entrada inicial de todos os demais contatos (Pessoas Físicas, novos clientes, e linhas com "CNPJ Não Cadastrado" que ainda não entraram em fluxo corporativo).
+   - **Escopo:** Informações sobre o menu, horário da cafeteria física, métodos de preparo, cafés especiais para consumo próprio e reservas.
+   - **Capacidade Especial:** Sensor conversacional. Se durante o diálogo o usuário solicitar condições para empresas, compras corporativas, ou confirmar que fala em nome de uma pessoa jurídica, realiza o **handoff interno para o Agente 3**.
+3. **Agente 3 — Empresa Identificada Durante a Conversa (`NovoLeadCorporativoAgent`):**
+   - **Gatilho de Ativação:** Ativado **exclusivamente quando, durante a conversa, o Atendimento Normal identifica que o usuário se trata de uma empresa**.
+   - **Escopo:** Condução do fluxo comercial B2B para novas empresas: apresenta condições para pessoa jurídica, solicita cordialmente a confirmação do CNPJ ou CPF para cadastro e aciona o SDK para persistir o novo CNPJ no CRM Core (`crm_api.update_contact_tax_id`).
 
 ---
 
-## 4. Critérios de Aceitação (Gherkin BDD)
+## 3. Análise do Modelo de Dados do CRM Core (`evo-ai-crm-community`)
 
-### Cenário 1: Cliente cadastrado no CRM com CNPJ
-- **Dado** uma mensagem recebida de um contato cujo cadastro no CRM possui `tax_id` com 14 dígitos válidos (CNPJ)
-- **Quando** o agente processa a requisição através de `before_agent`
-- **Então** o cliente é imediatamente classificado como `PJ`
-- **E** `needs_confirmation` é definido como `False`
-- **E** o agente prossegue diretamente com o atendimento sem solicitar documentos.
+Toda a interação com o CRM baseia-se nas entidades reais do schema:
 
-### Cenário 2: Cliente cadastrado no CRM classificado como Pessoa Jurídica
-- **Dado** uma mensagem recebida de um contato cujo cadastro no CRM possui `type == 'company'`
-- **Quando** a heurística do passo 1 é executada
-- **Então** o cliente é identificado como `PJ` com `source == "crm_registration"`
-- **E** o agente não solicita confirmação de documento.
-
-### Cenário 3: Cliente sem CNPJ no cadastro, mas com CNPJ na linha telefônica
-- **Dado** um contato cujo cadastro no CRM não possui CNPJ nem classificação `company`
-- **Mas** os metadados da linha telefônica associada contêm registro de CNPJ da empresa titular
-- **Quando** a heurística avalia o passo 2
-- **Então** o cliente é classificado como `PJ` com `source == "phone_line"`
-- **E** o CNPJ e o tipo `company` são sincronizados no cadastro do contato no CRM
-- **E** `needs_confirmation` é definido como `False`.
-
-### Cenário 4: Ambas as fontes ausentes — solicitação ativa de CPF ou CNPJ
-- **Dado** um contato sem CNPJ/classificação no cadastro e sem dados de CNPJ na linha telefônica
-- **Quando** o agente inicia o turno conversacional
-- **Então** o agente é instruído a solicitar cordialmente que o cliente informe seu CNPJ ou CPF
-- **E** `needs_confirmation` permanece `True`.
-
-### Cenário 5: Cliente confirma CNPJ (14 dígitos)
-- **Dado** que o cliente forneceu um CNPJ ("12.345.678/0001-90" ou "12345678000190")
-- **Quando** o agente invoca `save_customer_identification`
-- **Então** o documento é sanitizado para 14 dígitos numéricos
-- **E** o contato é atualizado no CRM com `tax_id` sanitizado e `type = 'company'`
-- **E** a sessão é atualizada com `classification = 'PJ'` e `needs_confirmation = False`
-- **E** o agente agradece e continua com o atendimento específico para PJ.
-
-### Cenário 6: Cliente confirma CPF (11 dígitos)
-- **Dado** que o cliente forneceu um CPF ("123.456.789-00" ou "12345678900")
-- **Quando** o agente invoca `save_customer_identification`
-- **Então** o documento é sanitizado para 11 dígitos numéricos
-- **E** o contato é atualizado no CRM com `tax_id` sanitizado e `type = 'person'`
-- **E** a sessão é atualizada com `classification = 'PF'` e `needs_confirmation = False`
-- **E** o agente segue com o atendimento para consumidor pessoa física.
-
-### Cenário 7: Documento com formato inválido
-- **Dado** que o cliente digitou uma sequência com quantidade incorreta de dígitos (ex: 8 dígitos)
-- **Quando** `save_customer_identification` é acionado
-- **Então** a ferramenta retorna status de erro indicando formato inválido
-- **E** o agente solicita gentilmente a correção sem interromper a sessão.
+1. **`Contact` (tabela `contacts`):**
+   - `id`: UUID (Primary Key).
+   - `type`: `contact_type_enum` (`'person'`, `'company'`, `'group'`).
+   - `tax_id`: `VARCHAR(14)` para CPF (11 dígitos) ou CNPJ (14 dígitos) sem máscara.
+   - `phone_number`: Formato E.164 (ex: `+5511999999999`).
+   - `additional_attributes` / `custom_attributes`: metadados e informações complementares da empresa.
+2. **`ContactCompany` (tabela `contact_companies`):**
+   - Vínculo M:N entre Pessoa Física (`type = 'person'`) e Empresa (`type = 'company'`).
+3. **`ContactInbox` e `Channel::Whatsapp` (tabelas `contact_inboxes`, `channel_whatsapp`):**
+   - Dados de canal, identificação do WhatsApp da linha e metadados de provedor.
 
 ---
 
-## 5. Plano de Rollout e Compatibilidade
+## 4. Integração Obrigatória via Biblioteca `paralax-evo-crm` (Ondas Topológicas)
 
-- **SemVer:** Minor bump em `anero-cafe-support` (`0.2.0`).
-- **Arquitetura 12-Factor:** Parâmetros de CRM (`CRM_URL`, `CRM_TOKEN`) lidos de variáveis de ambiente já existentes.
-- **Isolamento e Qualidade:**
-  - Formatação e linting validados via `just verify` (pyright, ruff, isort, import-linter, pytest).
-  - TDD obrigatório para todos os cenários da heurística.
-  - Docstrings no padrão Google com prefixo `Business Rule:` nos testes.
+Nenhum agente fará chamadas HTTP diretas ou ad-hoc ao CRM. Todas as operações são delegadas à biblioteca compartilhada:
+
+### 🌊 Onda 1: `paralax-ia/paralax-evo-crm` (SDK)
+- **Modelos Pydantic (`paralax/evo/crm/models.py`):**
+  - `ContactClassificationStatus(str, Enum)`: `"CNPJ_CADASTRADO"`, `"CNPJ_NAO_CADASTRADO"`, `"ATENDIMENTO_NORMAL"`.
+  - `CRMContact`: Modelo com `id`, `name`, `type`, `tax_id`, `phone_number`, `companies`.
+- **Métodos no `CRMAPIClient` (`paralax/evo/crm/client.py`):**
+  - `get_contact_by_phone(phone_number: str) -> CRMContact | None`
+  - `get_contact_sync(contact_id: str) -> CRMContact`
+  - `classify_incoming_line(phone_number: str, line_metadata: dict | None = None) -> LineClassificationResult`
+  - `update_contact_tax_id(contact_id: str, tax_id: str) -> CRMContact`
+- **Release:** Publicação da versão `0.2.12` no Artifact Registry.
+
+### 🌊 Onda 2: `paralax-ia/anero-cafe-support` (Agentes)
+- **Atualização de Dependência:** `paralax-evo-crm>=0.2.12` via `uv sync`.
+- **Agentes Especializados (`anero_cafe/agents/`):**
+  - `b2b_cadastrado_agent.py` (Agente 1)
+  - `atendimento_normal_agent.py` (Agente 2)
+  - `empresa_onboarding_agent.py` (Agente 3)
+- **Orquestrador / Router ADK:**
+  - Avalia a classificação da linha no início do ciclo via `crm_api.classify_incoming_line`.
+  - Direciona para o Agente 1 se `CNPJ_CADASTRADO`, ou para o Agente 2 nos demais casos.
+  - Suporta delegação / sub-agent transfer para o Agente 3 quando o Agente 2 detecta intenção corporativa.
+
+---
+
+## 5. Critérios de Aceitação (Gherkin BDD)
+
+- **Cenário 1: Mensagem de Linha com CNPJ Cadastrado**
+  - **Dado** mensagem recebida de linha vinculada a contato no CRM com `tax_id` de 14 dígitos ou `type == 'company'`
+  - **Quando** o roteador avalia a linha via `crm_api`
+  - **Então** classifica como `CNPJ_CADASTRADO`
+  - **E** a sessão é atendida diretamente pelo **Agente 1 (Clientes Cadastrados CNPJ)**.
+
+- **Cenário 2: Mensagem de Linha com CNPJ Não Cadastrado**
+  - **Dado** mensagem de linha não cadastrada com CNPJ no CRM, mas cujos metadados de canal (WhatsApp Business) indicam CNPJ
+  - **Quando** o roteador avalia a linha
+  - **Então** classifica como `CNPJ_NAO_CADASTRADO`
+  - **E** inicia o diálogo pelo **Agente 2 (Atendimento Normal)** mantendo o contexto de empresa potencial.
+
+- **Cenário 3: Atendimento Normal Identifica Empresa Durante a Conversa**
+  - **Dado** conversa em andamento com o **Agente 2 (Atendimento Normal)**
+  - **Quando** o cliente solicita orçamento para escritório ou indica ser empresa
+  - **Então** o Agente 2 aciona a transição para o **Agente 3 (Empresa Identificada / Onboarding B2B)**.
+
+- **Cenário 4: Agente 3 Coleta e Persiste CNPJ no CRM**
+  - **Dado** o **Agente 3** em atendimento
+  - **Quando** o cliente confirma o número do CNPJ
+  - **Então** o Agente 3 invoca `crm_api.update_contact_tax_id` através da SDK
+  - **E** o CRM atualiza o contato com `type = 'company'` e o `tax_id` sanitizado de 14 dígitos.
