@@ -1,6 +1,6 @@
 ---
 spec_id: SPEC-012
-title: "Identificação de Linha PJ/PF, Roteamento Multi-Agente e Fluxo B2B com Aprovação Manual via paralax-evo-crm"
+title: "Identificação de Linha PJ/PF, Roteamento Multi-Agente e Regras de Precificação e Pedidos via paralax-evo-crm"
 product:
   - anero-cafe-support
   - paralax-platform
@@ -18,7 +18,7 @@ target_repositories:
 status: DRAFT
 ---
 
-# SPEC-012: Identificação de Linha PJ/PF, Roteamento Multi-Agente e Fluxo B2B com Aprovação Manual via `paralax-evo-crm`
+# SPEC-012: Identificação de Linha PJ/PF, Roteamento Multi-Agente e Regras de Precificação e Pedidos via `paralax-evo-crm`
 
 > **Product:** [`anero-cafe-support`](../products/anero-cafe-support.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)  
 > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
@@ -27,21 +27,20 @@ status: DRAFT
 > **Status:** DRAFT (Aguardando Aprovação)  
 > **Autor:** Antigravity & Eduardo F. Santos  
 > **Data de Atualização:** 2026-11-09  
-> **Regra Crítica de Negócio:** **O Agente 3 NÃO cadastra a empresa de forma autônoma; o cadastro corporativo exige obrigatoriamente aprovação manual humana.**
 
 ---
 
 ## 1. Contexto e Motivação
 
-O atendimento digital do **Anero Café** precisa segmentar seus fluxos de atendimento com base na titularidade da linha e no perfil do interlocutor, roteando para **três agentes especializados de IA** a partir da identificação no CRM e metadados de canal.
+O atendimento digital do **Anero Café** opera com fluxos diferenciados para pessoas físicas e empresas, segmentando os contatos a partir da titularidade da linha e do perfil de compra no CRM Core (`evo-ai-crm-community`).
 
 ### 1.1. Heurística de Entrada e Classificação da Linha:
-Quando a linha manda mensagem, o sistema executa a seguinte sequência:
+Quando a linha manda mensagem, a biblioteca `paralax-evo-crm` executa a seguinte sequência:
 1. **Verificação de Cadastro no CRM:**
    - Verifica se a linha/telefone já possui contato cadastrado no CRM (`crm_api.get_contact_by_phone`).
    - Se cadastrada, verifica se possui CPF ou CNPJ registrado (`tax_id` ou atributos).
 2. **Identificação de "CNPJ Cadastrado":**
-   - Se existir contato previamente aprovado/cadastrado do tipo CNPJ (ex: `tax_id` com 14 dígitos ou `type == 'company'`), identifica o interlocutor como **CNPJ Cadastrado**.
+   - Se existir contato previamente cadastrado do tipo CNPJ (ex: `tax_id` com 14 dígitos ou `type == 'company'`), identifica o interlocutor como **CNPJ Cadastrado**.
 3. **Identificação pela Linha Telefônica ("CNPJ Não Cadastrado"):**
    - Caso NÃO seja um CNPJ cadastrado (ou seja uma nova linha, ou cadastrada como CPF/sem documento):
    - Tenta descobrir pela linha se existe um CNPJ vinculado (metadados do canal, WhatsApp Business Profile, cadastro da operadora).
@@ -50,7 +49,7 @@ Quando a linha manda mensagem, o sistema executa a seguinte sequência:
 
 ---
 
-## 2. Arquitetura dos Três Agentes de IA
+## 2. Arquitetura e Regras de Negócio dos Três Agentes
 
 ```
                        ┌─────────────────────────────────────────┐
@@ -72,41 +71,36 @@ Quando a linha manda mensagem, o sistema executa a seguinte sequência:
                  │        AGENTE 1         │ │        AGENTE 2         │
                  │   Clientes Cadastrados  │ │   Atendimento Normal    │
                  │          CNPJ           │ │   (Pessoa Física/Menu)  │
-                 │  • Pedidos corporativos │ └────────────┬────────────┘
-                 │  • Faturamento B2B      │              │
-                 │  • Tabela PJ cadastrada │              │ Durante a conversa identifica
-                 └─────────────────────────┘              │ que usuário se trata de empresa
+                 │                         │ │                         │
+                 │ • NÃO MOSTRA PREÇO EM   │ │ • MOSTRA PREÇOS DO SITE │
+                 │   NENHUMA HIPÓTESE      │ │ • Aceita pedidos com    │
+                 │ • Consulta catálogo     │ │   base nesses preços    │
+                 │ • Aceita pedidos apenas │ └────────────┬────────────┘
+                 └─────────────────────────┘              │
+                                                          │ Durante a conversa identifica
+                                                          │ que usuário se trata de empresa
                                                           │ (ex: pedido B2B, cotação corporativa)
                                                           ▼
                                              ┌─────────────────────────┐
                                              │        AGENTE 3         │
                                              │   Empresa Identificada  │
                                              │  (Coleta & Qualificação)│
-                                             │  • Coleta CNPJ e dados  │
-                                             │  • Registra solicitação │
-                                             │  • NÃO cadastra direto  │
-                                             │  • APROVAÇÃO MANUAL 👤 │
+                                             │                         │
+                                             │ • NÃO MOSTRA PREÇO      │
+                                             │ • Informa que o pedido  │
+                                             │   será analisado        │
+                                             │ • Cadastro PJ requer    │
+                                             │   APROVAÇÃO MANUAL 👤   │
                                              └─────────────────────────┘
 ```
 
-### Detalhamento dos Três Agentes:
+### 2.1. Regras Específicas de Precificação e Pedidos por Agente:
 
-1. **Agente 1 — Clientes Cadastrados CNPJ (`B2BCadastradoAgent`):**
-   - **Gatilho de Ativação:** Linha reconhecida como **"CNPJ Cadastrado"** logo na entrada.
-   - **Escopo:** Atendimento prioritário e direto a empresas que já passaram pelo fluxo de aprovação e já estão cadastradas no CRM (recorrência de grãos corporativos, contratos de comodato/locação de máquinas espresso, faturamento e segundas vias).
-2. **Agente 2 — Atendimento Normal (`AtendimentoNormalAgent`):**
-   - **Gatilho de Ativação:** Entrada inicial de todos os demais contatos (Pessoas Físicas, novos clientes, e linhas com "CNPJ Não Cadastrado" que ainda não entraram em fluxo corporativo).
-   - **Escopo:** Informações sobre o menu, horário da cafeteria física, métodos de preparo, cafés especiais para consumo próprio e reservas.
-   - **Sensor Conversacional:** Se durante o diálogo o usuário solicitar condições para empresas, compras corporativas ou confirmar que fala em nome de uma pessoa jurídica, realiza o **handoff interno para o Agente 3**.
-3. **Agente 3 — Empresa Identificada Durante a Conversa (`LeadB2BQualificacaoAgent`):**
-   - **Gatilho de Ativação:** Ativado **somente quando, durante a conversa, o Atendimento Normal identificar que o usuário se trata de uma empresa**.
-   - **Escopo:**
-     - Qualifica a demanda corporativa (volume de consumo, número de colaboradores, interesse em grãos ou máquinas).
-     - Solicita cordialmente as informações da empresa (CNPJ, Razão Social/Nome da Empresa, Nome do Responsável).
-     - Registra a solicitação de cadastro corporativo no CRM via biblioteca `paralax-evo-crm` (criando card de oportunidade na etapa de **"Aprovação Cadastral PJ"** no pipeline de vendas com notas e campos customizados).
-   - **REGRA CRÍTICA INEGOCIÁVEL (APROVAÇÃO MANUAL):**
-     - **O Agente 3 NÃO tem permissão para cadastrar ou aprovar a empresa autonomamente no CRM como cliente PJ ativo.**
-     - O Agente 3 informa com clareza e cordialidade ao cliente que a solicitação de abertura de conta PJ foi registrada com sucesso e que os dados foram encaminhados para a equipe comercial/financeira para **análise e aprovação cadastral manual**.
+| Agente | Perfil / Momento | Regra de Exibição de Preços | Regra de Solicitação de Pedidos |
+|---|---|---|---|
+| **Agente 1** (`B2BCadastradoAgent`) | Clientes previamente cadastrados como CNPJ | **NÃO MOSTRA PREÇO EM NENHUMA HIPÓTESE.** Consulta o catálogo e descreve produtos normalmente (origens, notas sensoriais, grãos, moagens), mas oculta qualquer valor monetário. | **Aceita solicitações de pedidos apenas.** Registra os itens e quantidades para processamento pelo faturamento corporativo no CRM. |
+| **Agente 2** (`AtendimentoNormalAgent`) | Consumidores em geral / Pessoa Física | **MOSTRA OS PREÇOS DO SITE.** Utiliza ferramentas de catálogo para informar valores vigentes da cafeteria física e do e-commerce. | **Permite solicitações de pedidos com base no preço exibido.** Conduz pedidos de varejo direto para consumidores finais. |
+| **Agente 3** (`LeadB2BQualificacaoAgent`) | Empresa identificada durante o atendimento normal | **NÃO MOSTRA PREÇO.** Informa com clareza ao cliente corporativo que os valores e condições serão definidos sob medida. | **Informa que o pedido e o cadastro serão analisados.** Registra o pedido como solicitação comercial para **aprovação manual** da equipe humana. |
 
 ---
 
@@ -115,11 +109,14 @@ Quando a linha manda mensagem, o sistema executa a seguinte sequência:
 A integração respeita a integridade do CRM Core (`evo-ai-crm-community`):
 
 1. **`Contact` (tabela `contacts`):**
-   - Durante a fase de qualificação pelo Agente 3, o contato permanece com `type = 'person'` e `contact_type = 'lead'` (não é alterado para `company` nem vira `customer` automaticamente).
-2. **Pipeline de Aprovação (`pipeline_items` e `pipelines`):**
-   - O Agente 3 invoca `crm_api.ensure_conversation_in_pipeline` e `crm_api.create_pipeline_item` / atualiza campos customizados (`cnpj_solicitado`, `razao_social`, `demanda_estimada`), posicionando o card na etapa de **"Aprovação Cadastral Manual"**.
-3. **Aprovação Manual pelo Operador Humano:**
-   - O operador comercial/financeiro valida os documentos do CNPJ no CRM e, manualmente, converte o contato em `company` e aprova a conta corporativa.
+   - Agente 1 atende contatos cujo `type == 'company'` e possuem `tax_id` de 14 dígitos (CNPJ).
+   - Agente 2 atende contatos onde `type == 'person'` ou não identificados.
+   - Agente 3 não altera o contato para `company` de forma autônoma; o contato permanece como `lead` até que o operador humano aprove o cadastro.
+2. **Pipeline de Oportunidades (`pipeline_items` e `pipelines`):**
+   - O Agente 1 registra pedidos B2B de clientes cadastrados no pipeline de pedidos corporativos.
+   - O Agente 3 registra solicitações B2B no pipeline de "Aprovação Cadastral e Pedidos B2B" com notas detalhando os produtos de interesse e dados da empresa.
+3. **Catálogo e Consulta de Produtos:**
+   - Ferramenta `coffee_search` adaptada: nos Agentes 1 e 3, a formatação de retorno da ferramenta omite campos de preço antes da entrega ao LLM, garantindo defesa em profundidade (defense-in-depth) contra vazamento acidental de preços pelo modelo.
 
 ---
 
@@ -128,7 +125,7 @@ A integração respeita a integridade do CRM Core (`evo-ai-crm-community`):
 ### 🌊 Onda 1: `paralax-ia/paralax-evo-crm` (SDK)
 - **Modelos Pydantic (`paralax/evo/crm/models.py`):**
   - `ContactClassificationStatus`: `"CNPJ_CADASTRADO"`, `"CNPJ_NAO_CADASTRADO"`, `"ATENDIMENTO_NORMAL"`.
-  - `CompanyRegistrationRequest`: payload estruturado contendo `contact_id`, `conversation_id`, `cnpj`, `company_name`, `contact_name`, `notes`.
+  - `CompanyRegistrationRequest`: payload estruturado contendo `contact_id`, `conversation_id`, `cnpj`, `company_name`, `contact_name`, `items_requested`, `notes`.
   - `LineClassificationResult`: resultado consolidado da análise de entrada.
 - **Métodos no `CRMAPIClient` (`paralax/evo/crm/client.py`):**
   - `get_contact_by_phone(phone_number: str) -> CRMContact | None`
@@ -141,35 +138,31 @@ A integração respeita a integridade do CRM Core (`evo-ai-crm-community`):
 ### 🌊 Onda 2: `paralax-ia/anero-cafe-support` (Agentes)
 - **Atualização de Dependência:** Bump para `paralax-evo-crm>=0.2.12` e `uv sync`.
 - **Implementação dos 3 Agentes (`anero_cafe/agents/`):**
-  - `b2b_cadastrado_agent.py` (Agente 1)
-  - `atendimento_normal_agent.py` (Agente 2 - com detecção e handoff de intenção corporativa)
-  - `lead_b2b_qualificacao_agent.py` (Agente 3 - com tool `solicitar_cadastro_pj` para aprovação manual)
+  - `b2b_cadastrado_agent.py` (Agente 1): Prompt rigoroso proibindo exibição de preços + mascaramento de preços nas tools. Aceita apenas registro de pedidos corporativos.
+  - `atendimento_normal_agent.py` (Agente 2): Exibe preços do site normalmente e aceita pedidos no preço tabelado. Detecta intenção de empresa e transfere para o Agente 3.
+  - `lead_b2b_qualificacao_agent.py` (Agente 3): Proíbe exibição de preços, informa que o pedido e cadastro serão analisados e envia solicitação para aprovação manual.
 - **Orquestrador de Entrada:** Roteia para Agente 1 se `CNPJ_CADASTRADO` ou Agente 2 nos demais casos.
-- **Testes Unitários:** Cobertura de todos os cenários com TDD.
+- **Testes Unitários:** Cobertura estrita com TDD de todas as regras de precificação e pedidos.
 
 ---
 
 ## 5. Critérios de Aceitação (Gherkin BDD)
 
-- **Cenário 1: Entrada com CNPJ Cadastrado**
-  - **Dado** mensagem de linha com CNPJ já cadastrado e aprovado no CRM
-  - **Quando** a linha é classificada na entrada
-  - **Então** ativa diretamente o **Agente 1 (Clientes Cadastrados CNPJ)**.
+- **Cenário 1: Agente 1 — Proibição Estrita de Preço e Aceite de Pedido**
+  - **Dado** cliente corporativo cadastrado (CNPJ Cadastrado) em atendimento com o **Agente 1**
+  - **Quando** o cliente consulta o catálogo de cafés e solicita o valor de um pacote de grãos
+  - **Então** o Agente 1 descreve os cafés normalmente (notas sensoriais, método, torra), mas **NÃO informa o preço em nenhuma hipótese**
+  - **E** aceita a solicitação de pedido corporativo registrando quantidades e itens para faturamento posterior.
 
-- **Cenário 2: Entrada Normal / CNPJ Não Cadastrado**
-  - **Dado** mensagem de nova linha ou linha com CNPJ detectado mas ainda não cadastrado no CRM
-  - **Quando** a linha é classificada na entrada
-  - **Então** ativa o **Agente 2 (Atendimento Normal)**.
+- **Cenário 2: Agente 2 — Exibição de Preços do Site e Pedidos de Varejo**
+  - **Dado** consumidor final ou novo cliente em atendimento com o **Agente 2**
+  - **Quando** o cliente consulta os produtos do cardápio
+  - **Então** o Agente 2 **informa os preços públicos do site**
+  - **E** permite solicitações de pedido com base nesse preço.
 
-- **Cenário 3: Ativação do Agente 3 Durante o Atendimento Normal**
-  - **Dado** cliente interagindo com o **Agente 2 (Atendimento Normal)**
-  - **Quando** o cliente declara interesse corporativo (ex: "gostaria de cotação para o escritório da minha empresa")
-  - **Então** o Agente 2 ativa o **Agente 3 (Empresa Identificada / Qualificação)**.
-
-- **Cenário 4: Agente 3 Coleta Dados e Registra para Aprovação Manual (Sem Cadastro Direto)**
-  - **Dado** o **Agente 3** em atendimento
-  - **Quando** o cliente fornece o CNPJ ("12.345.678/0001-90") e nome da empresa
-  - **Então** o Agente 3 invoca `crm_api.submit_company_registration_request`
-  - **E** um card de lead é registrado no pipeline para aprovação manual
-  - **E** o contato NÃO é convertido automaticamente para `type = 'company'`
-  - **E** o Agente 3 informa cordialmente ao cliente que a solicitação foi enviada para análise e aprovação manual da equipe comercial.
+- **Cenário 3: Agente 3 — Omissão de Preço e Aviso de Análise Manual**
+  - **Dado** empresa identificada durante o atendimento normal, transferida para o **Agente 3**
+  - **Quando** o cliente solicita cotação ou faz pedido corporativo
+  - **Então** o Agente 3 **NÃO mostra preços**
+  - **E** informa que a solicitação de pedido e o cadastro corporativo **serão analisados manualmente** pela equipe comercial/financeira
+  - **E** registra a solicitação no CRM para aprovação manual humana.
