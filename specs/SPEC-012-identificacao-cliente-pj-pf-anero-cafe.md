@@ -106,24 +106,28 @@ Quando a linha manda mensagem, a biblioteca `paralax-evo-crm` executa a seguinte
 
 ## 3. Modelo de Notificação e Abstração no CRM
 
-A arquitetura desacopla a infraestrutura de mensageria da regra de negócio específica da linha:
+A arquitetura desacopla a infraestrutura de mensageria da regra de negócio específica da linha, garantindo despacho determinístico pelo canal correto:
 
-1. **Abstração no SDK `paralax-evo-crm`:**
-   - O `paralax-evo-crm` disponibiliza o método agnóstico e reutilizável:
+1. **Origem da Notificação e Descoberta Automática de Canal:**
+   - Toda solicitação processada pelo agente provém obrigatoriamente de uma conversa ativa existente em um canal (`conversation_id`).
+   - O canal (`inbox_id`) **NÃO é parametrizado em nenhuma hipótese**, garantindo que o agente utilize exatamente o mesmo canal de mensageria da conversa de entrada.
+2. **Ciclo Completo de Notificação no SDK `paralax-evo-crm`:**
+   - O método agnóstico `notify_phone` executa o ciclo completo de ponta a ponta:
      ```python
      async def notify_phone(
+         self,
          phone_number: str,
          message: str,
-         conversation_id: int | str | None = None,
-         private: bool = True,
+         conversation_id: int | str,
      ) -> dict[str, Any]
      ```
-   - O SDK não possui dependência ou acoplamento a regras da Anero Café ou formatos de pedidos específicos. Ele é responsável por registrar notas internas na conversa correspondente no CRM (quando informado `conversation_id`) e direcionar a mensagem ao telefone de destino informado.
-2. **Responsabilidade da Mensagem no `anero-cafe-support`:**
-   - A montagem, validação e formatação do texto da notificação (contendo CNPJ, Razão Social, Contato, Telefone, Itens do Pedido de Grãos/Café e Observações) residem no próprio agente do Anero Café.
-3. **Configuração do Telefone do Proprietário via ArgoCD (12-Factor):**
-   - O telefone de destino para as notificações do proprietário é estritamente externalizado como variável de ambiente no agente (`ANERO_OWNER_PHONE_NUMBER` / `OWNER_PHONE_NUMBER`).
-   - A configuração é centralizada declarativamente nos manifestos do repositório `argocd` (`argocd/prod/anero-cafe-support/patch-env.yaml`), sem nenhuma dependência hardcoded no código.
+   - **Passo 1 (Descoberta do Canal):** Consulta a conversa ativa (`GET /api/v1/conversations/{conversation_id}`) e extrai o `inbox_id`.
+   - **Passo 2 (Contato do Destinatário):** Localiza o contato por telefone (`GET /api/v1/contacts/search?q={phone_number}`) ou cria um novo contato (`POST /api/v1/contacts`).
+   - **Passo 3 (Criação da Conversa e Despacho no Canal):** Cria a conversa de saída na mesma `inbox_id` (`POST /api/v1/conversations`) com `{ "message": { "content": message, "message_type": "outgoing" } }`, acionando o provider de mensageria (ex: WhatsApp) daquela linha.
+   - **Passo 4 (Auditoria Interna):** Registra uma nota interna privada na conversa de origem (`conversation_id`) para rastreabilidade dos atendentes humanos.
+3. **Responsabilidade da Mensagem e Telefone do Dono no `anero-cafe-support`:**
+   - A criação e formatação do texto da notificação (contendo CNPJ, Razão Social, Contato, Telefone, Itens do Pedido de Grãos/Café e Observações) residem no próprio agente do Anero Café.
+   - O telefone de destino do proprietário é configurado exclusivamente via variável de ambiente (`OWNER_PHONE_NUMBER`), provida declarativamente nos manifestos do `argocd` (`argocd/prod/anero-cafe-support/patch-env.yaml`).
 4. **Catálogo e Consulta de Produtos:**
    - Ferramenta de catálogo adaptada nos Agentes 1 e 3: omite campos de preço antes da entrega ao LLM (*defense-in-depth*).
 
@@ -140,19 +144,25 @@ A arquitetura desacopla a infraestrutura de mensageria da regra de negócio espe
   - Utilitários: `sanitize_tax_id(tax_id)` e `validate_tax_id(tax_id)`.
 - **Métodos no `CRMAPIClient` (`paralax/evo/crm/client.py`):**
   - `get_contact_by_phone(phone_number: str) -> CRMContact | None`
+  - `get_contact(contact_id: int | str) -> CRMContact`
   - `get_contact_sync(contact_id: str) -> CRMContact`
+  - `create_contact(name: str, phone_number: str) -> CRMContact`
+  - `get_or_create_contact(phone_number: str, name: str | None) -> CRMContact`
+  - `get_conversation(context_id: str) -> dict[str, Any]`
+  - `create_conversation(inbox_id: int | str, contact_id: int | str, message: dict | None) -> dict[str, Any]`
+  - `record_internal_note(conversation_id: int | str, content: str) -> dict[str, Any]`
   - `classify_incoming_line(phone_number: str, line_metadata: dict | None) -> LineClassificationResult`
-  - `notify_phone(phone_number: str, message: str, conversation_id: int | str | None = None, private: bool = True) -> dict[str, Any]`: método genérico para notificar telefones e registrar notas internas no CRM.
+  - `notify_phone(phone_number: str, message: str, conversation_id: int | str) -> dict[str, Any]`: executa o ciclo completo herdando o `inbox_id` da conversa ativa e despachando a mensagem de saída.
 - **Testes Unitários:** Validação com TDD em `tests/paralax/evo/crm/test_client_contact.py`.
 - **Release:** Publicação da versão `0.2.12` no Artifact Registry.
 
 ### 🌊 Onda 2: `paralax-ia/anero-cafe-support` (Agentes e Regra de Notificação B2B)
-- **Configuração no ArgoCD (`argocd/prod/anero-cafe-support/patch-env.yaml`):** Injeção da variável de ambiente `ANERO_OWNER_PHONE_NUMBER`.
+- **Configuração no ArgoCD (`argocd/prod/anero-cafe-support/patch-env.yaml`):** Injeção da variável de ambiente `OWNER_PHONE_NUMBER`.
 - **Atualização de Dependência:** Bump declarativo para `paralax-evo-crm>=0.2.12` e `uv sync` oficial após publicação.
 - **Formatação de Notificação e Tool no Agente da Anero:**
   - Definição do schema/modelo de notificação de pedido corporativo no próprio `anero-cafe-support`.
   - Formatação do texto da mensagem com os dados cadastrais da empresa e os itens solicitados.
-  - Invocação de `client.notify_phone(phone_number=settings.owner_phone_number, message=formatted_text, conversation_id=conv_id)`.
+  - Invocação de `client.notify_phone(phone_number=settings.owner_phone_number, message=formatted_text, conversation_id=current_conversation_id)`.
 - **Implementação dos 3 Agentes (`anero_cafe/agents/` ou `anero_cafe/agent.py`):**
   - `b2b_cadastrado_agent.py` (Agente 1): Consulta catálogo sem preços, proíbe valores, aceita pedidos corporativos para faturamento.
   - `atendimento_normal_agent.py` (Agente 2): Mostra preços do site e aceita pedidos no preço tabelado. Detecta empresa e transfere para o Agente 3.
