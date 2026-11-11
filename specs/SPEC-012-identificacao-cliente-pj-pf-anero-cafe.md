@@ -104,49 +104,60 @@ Quando a linha manda mensagem, a biblioteca `paralax-evo-crm` executa a seguinte
 
 ---
 
-## 3. Modelo de Notificação e Integração via `paralax-evo-crm`
+## 3. Modelo de Notificação e Abstração no CRM
 
-A integração simplifica a operação corporativa sem depender de funis ou pipelines de aprovação cadastral no CRM Core:
+A arquitetura desacopla a infraestrutura de mensageria da regra de negócio específica da linha:
 
-1. **`Contact` (tabela `contacts`):**
-   - Agente 1 atende contatos cujo `type == 'company'` e possuem `tax_id` de 14 dígitos (CNPJ).
-   - Agente 2 atende contatos onde `type == 'person'` ou novos contatos.
-   - Agente 3 não altera o contato para `company` autonomamente.
-2. **Notificação ao Dono da Anero:**
-   - **Não há pipeline** para classificação e envio para aprovação de CNPJ.
-   - Ao final do atendimento com PJ não cadastrado, o Agente 3 dispara uma notificação direta para o dono da Anero contendo:
-     - Dados da Empresa: Razão Social/Nome Fantasia, CNPJ, Nome do Contato e Telefone da Linha.
-     - Detalhes do Pedido: Cafés, moagens, embalagens e quantidades solicitadas.
-     - Contexto e observações da conversa.
-   - A notificação é registrada como nota interna na conversa do CRM e despachada para o canal de notificação do proprietário.
-3. **Catálogo e Consulta de Produtos:**
+1. **Abstração no SDK `paralax-evo-crm`:**
+   - O `paralax-evo-crm` disponibiliza o método agnóstico e reutilizável:
+     ```python
+     async def notify_phone(
+         phone_number: str,
+         message: str,
+         conversation_id: int | str | None = None,
+         private: bool = True,
+     ) -> dict[str, Any]
+     ```
+   - O SDK não possui dependência ou acoplamento a regras da Anero Café ou formatos de pedidos específicos. Ele é responsável por registrar notas internas na conversa correspondente no CRM (quando informado `conversation_id`) e direcionar a mensagem ao telefone de destino informado.
+2. **Responsabilidade da Mensagem no `anero-cafe-support`:**
+   - A montagem, validação e formatação do texto da notificação (contendo CNPJ, Razão Social, Contato, Telefone, Itens do Pedido de Grãos/Café e Observações) residem no próprio agente do Anero Café.
+3. **Configuração do Telefone do Proprietário via ArgoCD (12-Factor):**
+   - O telefone de destino para as notificações do proprietário é estritamente externalizado como variável de ambiente no agente (`ANERO_OWNER_PHONE_NUMBER` / `OWNER_PHONE_NUMBER`).
+   - A configuração é centralizada declarativamente nos manifestos do repositório `argocd` (`argocd/prod/anero-cafe-support/patch-env.yaml`), sem nenhuma dependência hardcoded no código.
+4. **Catálogo e Consulta de Produtos:**
    - Ferramenta de catálogo adaptada nos Agentes 1 e 3: omite campos de preço antes da entrega ao LLM (*defense-in-depth*).
 
 ---
 
 ## 4. Planejamento em Ondas Topológicas
 
-### 🌊 Onda 1: `paralax-ia/paralax-evo-crm` (SDK)
+### 🌊 Onda 1: `paralax-ia/paralax-evo-crm` (SDK Abstrato e Reutilizável)
 - **Modelos Pydantic (`paralax/evo/crm/models.py`):**
   - `ContactClassificationStatus`: `"CNPJ_CADASTRADO"`, `"CNPJ_NAO_CADASTRADO"`, `"ATENDIMENTO_NORMAL"`.
   - `CustomerClassification`: `"PJ"`, `"PF"`, `"UNKNOWN"`.
-  - `CorporateOrderNotification`: payload contendo `company_name`, `cnpj`, `contact_name`, `phone_number`, `conversation_id`, `order_items`, `notes`.
+  - `CRMContact`: modelos de contato com métodos de identificação fiscal (`is_company()`, `has_cnpj()`, `has_cpf()`).
   - `LineClassificationResult`: resultado consolidado da análise de entrada.
+  - Utilitários: `sanitize_tax_id(tax_id)` e `validate_tax_id(tax_id)`.
 - **Métodos no `CRMAPIClient` (`paralax/evo/crm/client.py`):**
   - `get_contact_by_phone(phone_number: str) -> CRMContact | None`
   - `get_contact_sync(contact_id: str) -> CRMContact`
   - `classify_incoming_line(phone_number: str, line_metadata: dict | None) -> LineClassificationResult`
-  - `notify_owner_corporate_order(notification: CorporateOrderNotification, owner_phone_number: str | None = None) -> dict[str, Any]`: despacha a notificação de novo pedido PJ não cadastrado com dados da empresa e itens solicitados.
+  - `notify_phone(phone_number: str, message: str, conversation_id: int | str | None = None, private: bool = True) -> dict[str, Any]`: método genérico para notificar telefones e registrar notas internas no CRM.
 - **Testes Unitários:** Validação com TDD em `tests/paralax/evo/crm/test_client_contact.py`.
 - **Release:** Publicação da versão `0.2.12` no Artifact Registry.
 
-### 🌊 Onda 2: `paralax-ia/anero-cafe-support` (Agentes)
-- **Atualização de Dependência:** Bump para `paralax-evo-crm>=0.2.12` e `uv sync` oficial.
+### 🌊 Onda 2: `paralax-ia/anero-cafe-support` (Agentes e Regra de Notificação B2B)
+- **Configuração no ArgoCD (`argocd/prod/anero-cafe-support/patch-env.yaml`):** Injeção da variável de ambiente `ANERO_OWNER_PHONE_NUMBER`.
+- **Atualização de Dependência:** Bump declarativo para `paralax-evo-crm>=0.2.12` e `uv sync` oficial após publicação.
+- **Formatação de Notificação e Tool no Agente da Anero:**
+  - Definição do schema/modelo de notificação de pedido corporativo no próprio `anero-cafe-support`.
+  - Formatação do texto da mensagem com os dados cadastrais da empresa e os itens solicitados.
+  - Invocação de `client.notify_phone(phone_number=settings.owner_phone_number, message=formatted_text, conversation_id=conv_id)`.
 - **Implementação dos 3 Agentes (`anero_cafe/agents/` ou `anero_cafe/agent.py`):**
   - `b2b_cadastrado_agent.py` (Agente 1): Consulta catálogo sem preços, proíbe valores, aceita pedidos corporativos para faturamento.
   - `atendimento_normal_agent.py` (Agente 2): Mostra preços do site e aceita pedidos no preço tabelado. Detecta empresa e transfere para o Agente 3.
-  - `lead_b2b_qualificacao_agent.py` (Agente 3): Busca no catálogo sem preços, coleta os dados da empresa e o pedido, e aciona a notificação para o dono da Anero ao final.
-- **Testes Unitários:** Cobertura rigorosa com TDD de todas as regras.
+  - `lead_b2b_qualificacao_agent.py` (Agente 3): Busca no catálogo sem preços, coleta os dados da empresa e o pedido, formata a mensagem e aciona a notificação para o dono da Anero ao final.
+- **Testes Unitários:** Cobertura rigorosa com TDD em `tests/unit/`.
 
 ---
 
