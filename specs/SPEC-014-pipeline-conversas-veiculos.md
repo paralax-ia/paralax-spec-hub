@@ -20,8 +20,8 @@ prompts:
   target_repo: paralax-ia/customer-support-vehicles
   file: vehicles/pipeline_rules.py
   symbol: DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE
-  label: draft
-  description: Prompt do classificador LLM especializado em avaliar a última interação da conversa e a sequência ordenada de estágios do CRM para decidir avanço, regressão ou manutenção de etapa no funil de veículos. Opera sob a label 'draft' durante o desenvolvimento e homologação até a aprovação da spec.
+  label: production
+  description: Prompt do classificador LLM especializado em avaliar a última interação da conversa e a sequência ordenada de estágios do CRM para decidir avanço, regressão ou manutenção de etapa no funil de veículos. Promovido para a label 'production' após aprovação formal da spec.
 status: APPROVED
 ---
 
@@ -96,8 +96,8 @@ Esta especificação **não cria novos endpoints no backend do CRM nem reimpleme
      - Enquanto a spec e os Pull Requests estiverem em análise/desenvolvimento (branch de trabalho), o prompt `vehicles/pipeline_classifier` é registrado e consultado no Langfuse com a label `draft`.
      - Isso impede que prompts em teste afetem qualquer comportamento ou tráfego em produção.
    - **Fase Pós-Aprovação e Merge da Spec (Promoção para Produção):**
-     - Somente após a aprovação formal da SPEC-014 e o merge das branches de trabalho na `main`, o prompt no Langfuse é promovido para a label `production`.
-     - O runtime dos contêineres em produção consome a label `production` (`LANGFUSE_PROMPT_LABEL="production"`).
+     - O prompt `vehicles/pipeline_classifier` foi oficialmente registrado e promovido no Langfuse com a label `production` (versão 1).
+     - O runtime da aplicação consome por padrão a label `production` (`LANGFUSE_PROMPT_LABEL="production"`).
 
 ### 2.5. Suporte a Avanço, Regressão e Manutenção de Estágio
 - **Avançar:** Quando a interação demonstra evolução na intenção de compra (ex: de saudação para veículo específico; de veículo específico para proposta de financiamento/troca; de simulação para solicitação de visita/vendedor).
