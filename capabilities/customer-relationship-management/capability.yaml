@@ -41,4 +41,8 @@ specs:
   title: Transbordo para Celular do Atendente com Resumo Estruturado da Conversa
   status: DRAFT
   spec_path: specs/SPEC-007-notifica-celular-do-atendente.md
+- id: SPEC-013
+  title: Nova Instância Dedicada do CRM para Anero Café (anerocafe.paralax.ia.br) e Atualização Holística de Pipelines
+  status: DRAFT
+  spec_path: specs/SPEC-013-nova-instancia-crm-anero-cafe.md
 runtime_contracts: {}

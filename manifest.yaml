@@ -142,3 +142,32 @@ repositories:
     release_strategy: "semver"
     deploy_target: "production"
 
+  # Orquestração de Imagens do CRM
+  - name: "evolution-crm"
+    repo: "paralax-ia/evolution-crm"
+    role: "orchestrator"
+    language: "yaml"
+    depends_on:
+      - "evo-ai-crm-community"
+      - "evo-bot-runtime"
+    release_strategy: "semver"
+    deploy_target: "production"
+
+  # Infraestrutura e GitOps
+  - name: "terraform"
+    repo: "paralax-ia/terraform"
+    role: "infrastructure"
+    language: "hcl"
+    depends_on: []
+    release_strategy: "semver"
+    deploy_target: "production"
+
+  - name: "argocd"
+    repo: "paralax-ia/argocd"
+    role: "gitops"
+    language: "yaml"
+    depends_on: []
+    release_strategy: "semver"
+    deploy_target: "production"
+
+

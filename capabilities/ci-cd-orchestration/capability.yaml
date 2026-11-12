@@ -38,5 +38,9 @@ context_map:
   - paralax-support
   - anero-cafe-support
   - paralax-site
-specs: []
+specs:
+- id: SPEC-013
+  title: Nova Instância Dedicada do CRM para Anero Café (anerocafe.paralax.ia.br) e Atualização Holística de Pipelines
+  status: DRAFT
+  spec_path: specs/SPEC-013-nova-instancia-crm-anero-cafe.md
 runtime_contracts: {}
