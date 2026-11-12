@@ -57,7 +57,7 @@ jobs:
 
       - name: Instalar Dependências do Orquestrador
         run: |
-          pip install pyyaml pydantic
+          pip install pyyaml pydantic redis rich click
 
       - name: Gerar Token de Instalação da GitHub App (se secrets disponíveis)
         id: app-token
@@ -76,8 +76,11 @@ jobs:
             PR_NUM="${{ inputs.hub_pr_number }}"
             DRY_RUN="${{ inputs.dry_run }}"
           else
-            # No pull_request, identifica qual arquivo de spec foi alterado
-            SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/.*\.md$' | head -n 1)
+            # No pull_request, identifica qual arquivo de spec raiz foi alterado (ignora subdiretorios como .harness)
+            SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/SPEC-[^/]+\.md$' | head -n 1)
+            if [ -z "$SPEC_FILE" ]; then
+              SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/[^/]+\.md$' | head -n 1)
+            fi
             PR_NUM="${{ github.event.pull_request.number }}"
             DRY_RUN="false"
           fi
