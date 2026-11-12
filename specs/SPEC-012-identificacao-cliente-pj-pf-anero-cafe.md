@@ -15,6 +15,14 @@ target_repositories:
   - repo: paralax-ia/anero-cafe-support
     wave: 2
     role: ai-agent
+    prompts:
+      - anero_cafe/instruction
+      - anero_cafe/b2b_cadastrado
+      - anero_cafe/lead_b2b_qualificacao
+prompts:
+  - anero_cafe/instruction
+  - anero_cafe/b2b_cadastrado
+  - anero_cafe/lead_b2b_qualificacao
 status: DRAFT
 ---
 
@@ -109,13 +117,13 @@ Quando a linha manda mensagem, a biblioteca `paralax-evo-crm` executa a seguinte
    - O agente mantém a restrição obrigatória de comunicação com o usuário final em Português do Brasil: `**CRITICAL LANGUAGE RESTRICTION:** You MUST communicate with the user EXCLUSIVELY in Portuguese (PT-BR)`.
 2. **Resolução Dinâmica via `DynamicPromptManager`:**
    - Cada um dos 3 agentes possui gerenciador dinâmico de prompts (`anero_cafe/instruction`, `anero_cafe/b2b_cadastrado`, `anero_cafe/lead_b2b_qualificacao`), eliminando instruções congeladas em memória e viabilizando atualizações em tempo de execução sem reinicialização de contêineres.
-3. **Ciclo de Vida no Langfuse (Draft -> Sync -> Produção):**
+3. **Ciclo de Vida no Langfuse via CLI Harness (SPEC-PROMPT-01):**
+   - **Centralização no Harness:** O ciclo de vida e a governança de prompts no Langfuse são orquestrados centralmente pela CLI `harness` (`harness spec run` / sensor `PromptGovernanceSensor`), não residindo como scripts bespoke nos repositórios spoke.
    - **Fase de Desenvolvimento / Execução da Spec (Draft):**
-     - Novos prompts e revisões são sincronizados no Langfuse com a label `draft`.
+     - Prompts declarados no frontmatter da spec (`prompts:`) alterados no repositório spoke são detectados e sincronizados automaticamente no Langfuse com a label `draft`.
      - Permite testes pontuais e iterações de engenharia de prompt sem impactar o tráfego produtivo.
-     - O script de sincronização `anero_cafe.scripts.sync_prompts --label draft` (ou `just sync-prompts`) registra os prompts em modo rascunho.
    - **Fase Pós-Finalização da Spec (Promoção para Produção):**
-     - Após a aprovação, validação da suíte de testes e finalização da spec, os prompts no Langfuse são promovidos atribuindo-se a label `production` via `anero_cafe.scripts.sync_prompts --promote` (ou `just promote-prompts`).
+     - Após a validação da esteira e aprovação do cross-repo gate (`harness spec finish` / gate closure), a CLI `harness` promove os prompts automaticamente para a label `production` no Langfuse.
      - A label ativa consumida pelo runtime dos agentes em produção permanece sendo `production` (`LANGFUSE_PROMPT_LABEL="production"`).
 
 ---
