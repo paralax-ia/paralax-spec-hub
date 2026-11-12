@@ -108,6 +108,10 @@ runtime_contracts:
     - find_stage_by_name
   - name: CrmWebhookHandler
     methods:
+    - is_audio_enabled
+    - get_audio_disabled_fallback_message
+    - resolve_audio_model_overrides
+    - build_artifacts_response
     - run_crm
   - name: CRMAPIError
     methods: []
