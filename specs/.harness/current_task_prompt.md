@@ -5,12 +5,15 @@ The human operator requested a refinement/change in the technical specification 
 
 ## Target Specification File:
 `/mnt/home/eduardo/srv/paralax-ia/paralax-spec-hub/specs/SPEC-010-suporte-audio-como-feature.md`
+`/mnt/home/eduardo/srv/paralax-ia/paralax-spec-hub/specs/SPEC-009-suporte-audio.md`
 
 ## Current Specification Content:
 ```markdown
 ---
 spec_id: SPEC-010
 title: "Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelos Gemini Multimodais (Flash)"
+spec_id: SPEC-009
+title: "Suporte audio"
 product:
   - paralax-platform
   - customer-support-vehicles
@@ -62,6 +65,7 @@ status: DRAFT
 ---
 
 # SPEC-010: Suporte a Instruções de Áudio em Todos os Agentes de IA via Feature Flag e Modelos Gemini Multimodais (Flash)
+# SPEC-009: Suporte audio
 
 > **Product:** [`paralax-platform`](../products/paralax-platform.yaml) | [`customer-support-vehicles`](../products/customer-support-vehicles.yaml) | [`duo-dermato-support`](../products/duo-dermato-support.yaml) | [`anero-cafe-support`](../products/anero-cafe-support.yaml) | [`paralax-support`](../products/paralax-support.yaml)  
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
