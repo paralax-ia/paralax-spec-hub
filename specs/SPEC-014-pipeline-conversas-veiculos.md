@@ -20,7 +20,8 @@ prompts:
   target_repo: paralax-ia/customer-support-vehicles
   file: vehicles/pipeline_rules.py
   symbol: DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE
-  description: Prompt do classificador LLM especializado em avaliar a última interação da conversa e a sequência ordenada de estágios do CRM para decidir avanço, regressão ou manutenção de etapa no funil de veículos.
+  label: draft
+  description: Prompt do classificador LLM especializado em avaliar a última interação da conversa e a sequência ordenada de estágios do CRM para decidir avanço, regressão ou manutenção de etapa no funil de veículos. Opera sob a label 'draft' durante o desenvolvimento e homologação até a aprovação da spec.
 status: APPROVED
 ---
 
@@ -87,7 +88,18 @@ Esta especificação **não cria novos endpoints no backend do CRM nem reimpleme
   2. O estágio anterior em que o cliente se encontrava.
   3. A última interação consolidada da conversa (mensagem do usuário, chamadas de ferramentas de busca/detalhes/anúncios do turno e resposta da Isa).
 
-### 2.4. Suporte a Avanço, Regressão e Manutenção de Estágio
+### 2.4. Governança de Prompts e Ciclo de Vida no Langfuse (Draft -> Produção)
+1. **Regra de Prompts de Sistema em Inglês com Restrição PT-BR:**
+   - O prompt do classificador (`DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE`) deve ser redigido em inglês, contendo a persona, instruções de raciocínio, etapas do CRM e a restrição crítica de idioma: o campo `reason` na resposta estruturada deve ser estritamente em Português (PT-BR).
+2. **Ciclo de Vida no Langfuse (Draft -> Produção):**
+   - **Fase de Desenvolvimento e Revisão da Spec (Modo Draft):**
+     - Enquanto a spec e os Pull Requests estiverem em análise/desenvolvimento (branch de trabalho), o prompt `vehicles/pipeline_classifier` é registrado e consultado no Langfuse com a label `draft`.
+     - Isso impede que prompts em teste afetem qualquer comportamento ou tráfego em produção.
+   - **Fase Pós-Aprovação e Merge da Spec (Promoção para Produção):**
+     - Somente após a aprovação formal da SPEC-014 e o merge das branches de trabalho na `main`, o prompt no Langfuse é promovido para a label `production`.
+     - O runtime dos contêineres em produção consome a label `production` (`LANGFUSE_PROMPT_LABEL="production"`).
+
+### 2.5. Suporte a Avanço, Regressão e Manutenção de Estágio
 - **Avançar:** Quando a interação demonstra evolução na intenção de compra (ex: de saudação para veículo específico; de veículo específico para proposta de financiamento/troca; de simulação para solicitação de visita/vendedor).
 - **Regredir:** Quando o cliente desiste de uma proposta, cancela uma visita agendada, decide pesquisar uma faixa de preço totalmente inferior ou reinicia a conversa pedindo outro modelo.
 - **Manter:** Quando a última interação for uma dúvida pontual ou continuação da mesma etapa lógica sem alteração no status de maturidade comercial.
@@ -194,31 +206,32 @@ class PipelineStageClassification(BaseModel):
 ### 4.4. Prompt Template Padrão do Classificador (`DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE`)
 
 ```text
-Você é um classificador especialista no funil de vendas automotivo da concessionária Brasília Automóveis.
-Sua tarefa é analisar a ÚLTIMA INTERAÇÃO ocorrida na conversa em conjunto com a sequência ordenada de atividades obtida do CRM e o estágio anterior do cliente, decidindo com precisão se o cliente deve AVANÇAR para uma etapa posterior, REGREDIR para uma etapa anterior ou MANTER/PERMANECER no estágio atual.
+You are an expert sales pipeline classifier for the vehicle dealership Brasília Automóveis.
+Your task is to analyze the LATEST INTERACTION in the conversation along with the ordered sequence of stages from the CRM and the customer's previous stage, deciding with precision whether the customer should ADVANCE to a subsequent stage, REGRESS to a previous stage, or MAINTAIN/STAY in the current stage.
 
-### Sequência Ordenada de Estágios do Pipeline no CRM:
+### Ordered Sequence of Pipeline Stages in CRM:
 {{stages_list}}
 
-### Estágio Anterior do Cliente:
+### Customer's Previous Stage:
 {{previous_stage}}
 
-### Última Interação da Conversa:
+### Latest Conversation Interaction:
 {{last_interaction}}
 
-### Diretrizes de Decisão (Avançar, Regredir ou Manter):
-1. **Avançar estágio:**
-   - Avance do primeiro estágio (atendimento inicial/boas-vindas) quando o cliente especificar interesse em um modelo, marca, faixa de preço, ano ou enviar link de anúncio de veículo.
-   - Avance para etapa de simulação/proposta quando o cliente perguntar sobre condições de pagamento, entrada, parcelas de financiamento ou oferecer um carro usado na troca com detalhes.
-   - Avance para agendamento de visita/test-drive ou transbordo para vendedor quando o cliente solicitar ida à concessionária, agendamento de horário ou pedir contato telefônico com a equipe de vendas.
-2. **Regredir estágio:**
-   - Regrida para uma etapa anterior caso o cliente desista de uma simulação, cancele uma visita agendada, decida reiniciar a busca por outro veículo totalmente diferente ou solicite recomeçar o atendimento.
-3. **Manter estágio:**
-   - Permaneça exatamente em `previous_stage` se a última interação consistir apenas em esclarecimento de dúvidas pontuais do mesmo estágio, agradecimentos ou respostas curtas que não alterem o grau de maturidade comercial.
-4. **Regras Obrigatórias de Validação:**
-   - Escolha `target_stage_name` estritamente dentre os estágios listados na sequência do CRM.
-   - Defina `stage_changed` como true sempre que `target_stage_name` for diferente do estágio anterior (seja avanço ou regressão).
-   - Extraia em `custom_fields` os dados comerciais automotivos identificados (desired_vehicle_model, desired_vehicle_make, budget_max, has_trade_in, trade_in_details, financing_interest, test_drive_requested, preferred_contact_time).
+### Decision Guidelines (Advance, Regress, or Maintain):
+1. **Advance stage (Avançar estágio):**
+   - Advance from the first stage (initial contact / greeting) when the customer specifies interest in a vehicle model, make, price range, year, or sends an external vehicle ad link.
+   - Advance to simulation / proposal stage when the customer asks about payment terms, down payment, financing installments, or offers a trade-in vehicle with details.
+   - Advance to test drive / store visit or salesperson handoff when the customer requests an in-person visit to the dealership, appointment, or direct phone contact with the sales team.
+2. **Regress stage (Regredir estágio):**
+   - Regress to an earlier stage if the customer cancels a scheduled visit, gives up on a financing proposal, decides to restart searching for a completely different car, or asks to restart the inquiry.
+3. **Maintain stage (Manter estágio):**
+   - Stay exactly at `previous_stage` if the latest interaction consists only of routine clarifications, polite acknowledgments, or brief questions within the same stage without altering commercial maturity.
+4. **Mandatory Classification Rules:**
+   - Choose `target_stage_name` strictly from the stages listed in the CRM sequence.
+   - Set `stage_changed` to true whenever `target_stage_name` differs from `previous_stage` (whether advance or regression).
+   - Extract in `custom_fields` all identified automotive commercial data (desired_vehicle_model, desired_vehicle_make, budget_max, has_trade_in, trade_in_details, financing_interest, test_drive_requested, preferred_contact_time).
+   - **CRITICAL LANGUAGE RESTRICTION:** The `reason` field MUST be written in Portuguese (PT-BR).
 ```
 
 ---
