@@ -154,11 +154,11 @@ A arquitetura desacopla a infraestrutura de mensageria da regra de negócio espe
   - `classify_incoming_line(phone_number: str, line_metadata: dict | None) -> LineClassificationResult`
   - `notify_phone(phone_number: str, message: str, conversation_id: int | str) -> dict[str, Any]`: executa o ciclo completo herdando o `inbox_id` da conversa ativa e despachando a mensagem de saída.
 - **Testes Unitários:** Validação com TDD em `tests/paralax/evo/crm/test_client_contact.py`.
-- **Release:** Publicação da versão `0.2.12` no Artifact Registry.
+- **Release:** Publicação da versão `0.2.13` no Artifact Registry.
 
 ### 🌊 Onda 2: `paralax-ia/anero-cafe-support` (Agentes e Regra de Notificação B2B)
 - **Configuração no ArgoCD (`argocd/prod/anero-cafe-support/patch-env.yaml`):** Injeção da variável de ambiente `OWNER_PHONE_NUMBER`.
-- **Atualização de Dependência:** Bump declarativo para `paralax-evo-crm>=0.2.12` e `uv sync` oficial após publicação.
+- **Atualização de Dependência:** Bump declarativo para `paralax-evo-crm>=0.2.13` e `uv sync` oficial após publicação.
 - **Formatação de Notificação e Tool no Agente da Anero:**
   - Definição do schema/modelo de notificação de pedido corporativo no próprio `anero-cafe-support`.
   - Formatação do texto da mensagem com os dados cadastrais da empresa e os itens solicitados.
