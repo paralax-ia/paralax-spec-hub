@@ -102,6 +102,22 @@ Quando a linha manda mensagem, a biblioteca `paralax-evo-crm` executa a seguinte
 | **Agente 2** (`AtendimentoNormalAgent`) | Consumidores em geral / Pessoa Física | **MOSTRA OS PREÇOS DO SITE.** Utiliza ferramentas de catálogo para informar valores vigentes da cafeteria física e do e-commerce. | **Permite solicitações de pedidos com base no preço exibido.** Conduz pedidos de varejo direto para consumidores finais. |
 | **Agente 3** (`LeadB2BQualificacaoAgent`) | Empresa identificada / PJ não cadastrado | **NÃO MOSTRA PREÇO.** Realiza o ciclo de busca no catálogo normalmente sem exibir valores monetários. | **Notificação Direta ao Dono da Anero.** Não utiliza pipeline nem envio para aprovação cadastral de CNPJ no CRM. Ao final da interação, envia notificação completa para o dono da Anero com os dados da empresa e o pedido. |
 
+### 2.2. Governança de Prompts e Ciclo de Vida no Langfuse (Draft -> Sync -> Produção)
+
+1. **Regra de Prompts de Sistema em Inglês:**
+   - Todos os prompts de sistema de todos os agentes (`INSTRUCTION`, `INSTRUCTION_ATENDIMENTO_NORMAL`, `INSTRUCTION_B2B_CADASTRADO`, `INSTRUCTION_LEAD_B2B_QUALIFICACAO`) devem ser **estritamente escritos em inglês** (personas, restrições, seções XML, descrições de ferramentas e regras operacionais).
+   - O agente mantém a restrição obrigatória de comunicação com o usuário final em Português do Brasil: `**CRITICAL LANGUAGE RESTRICTION:** You MUST communicate with the user EXCLUSIVELY in Portuguese (PT-BR)`.
+2. **Resolução Dinâmica via `DynamicPromptManager`:**
+   - Cada um dos 3 agentes possui gerenciador dinâmico de prompts (`anero_cafe/instruction`, `anero_cafe/b2b_cadastrado`, `anero_cafe/lead_b2b_qualificacao`), eliminando instruções congeladas em memória e viabilizando atualizações em tempo de execução sem reinicialização de contêineres.
+3. **Ciclo de Vida no Langfuse (Draft -> Sync -> Produção):**
+   - **Fase de Desenvolvimento / Execução da Spec (Draft):**
+     - Novos prompts e revisões são sincronizados no Langfuse com a label `draft`.
+     - Permite testes pontuais e iterações de engenharia de prompt sem impactar o tráfego produtivo.
+     - O script de sincronização `anero_cafe.scripts.sync_prompts --label draft` (ou `just sync-prompts`) registra os prompts em modo rascunho.
+   - **Fase Pós-Finalização da Spec (Promoção para Produção):**
+     - Após a aprovação, validação da suíte de testes e finalização da spec, os prompts no Langfuse são promovidos atribuindo-se a label `production` via `anero_cafe.scripts.sync_prompts --promote` (ou `just promote-prompts`).
+     - A label ativa consumida pelo runtime dos agentes em produção permanece sendo `production` (`LANGFUSE_PROMPT_LABEL="production"`).
+
 ---
 
 ## 3. Modelo de Notificação e Abstração no CRM
