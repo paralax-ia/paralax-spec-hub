@@ -390,3 +390,51 @@ O processo de implementação deve seguir rigorosamente a metodologia de ondas d
 - [ ] Verificar propagação de DNS e validação do certificado HTTPS `https://anerocafe.paralax.ia.br`.
 - [ ] Validar acesso administrativo ao painel do CRM (`evo-frontend-anero`).
 - [ ] Testar fluxo conversacional ponta a ponta: Mensagem WhatsApp $\rightarrow$ `evo-bot-runtime` $\rightarrow$ `evo-crm-anero` $\rightarrow$ `anero-cafe-support` $\rightarrow$ Resposta ao cliente.
+
+---
+
+## 7. Estimativa de Custos Operacionais Mensais (FinOps / GCP)
+
+A precificação abaixo é baseada nos valores oficiais da Google Cloud Platform para a região `us-central1` (Iowa), considerando o dimensionamento de tráfego e atendimento da cafeteria Anero Café (~15.000 a 30.000 mensagens/mês, ~50 GB de anexos/mídias acumulados no ano e retenção padrão de logs e backups).
+
+São apresentados dois cenários arquiteturais:
+1. **Cenário A (Recomendado / Arquitetura Padrão SPEC-013):** Workloads isolados no cluster GKE existente, banco de dados lógico dedicado no Cloud SQL compartilhado, bucket GCS exclusivo, index lógico no Redis compartilhado e roteamento via Gateway API corporativo.
+2. **Cenário B (Isolamento Físico Estrito / Enterprise Hard Isolation):** Instâncias de VM, nós GKE, Cloud SQL e Redis 100% dedicados para a cliente.
+
+---
+
+### 7.1. Detalhamento por Componente — Cenário A (Incremental / Recomendado)
+
+| Componente / Recurso GCP | Dimensionamento / Perfil de Uso | Preço Unitário (us-central1) | Custo Mensal Estimado (USD) |
+|---|---|---|---|
+| **GKE Compute (Pods Workloads)** | • `evo-crm-anero` (Web: 250m CPU, 512MiB RAM; Sidekiq: 200m CPU, 512MiB RAM em Spot Node)<br>• `evo-frontend-anero` (50m CPU, 128MiB RAM)<br>• Satélites (`evo-auth`, `core`, `processor`, `bot`: ~400m CPU, 768MiB RAM agregados)<br>• Envoy Sidecars (:5000): ~150m CPU, 128MiB RAM<br>*Total agregado:* ~1.0 vCPU e ~2.0 GB RAM | Alocado sobre pool existente de `e2-standard-2` (on-demand) e Spot Nodes (`e2-standard-2` a ~\$0.016/hora) | **\$18.00 – \$28.00** |
+| **Cloud SQL PostgreSQL (`anero_crm_prod`)** | • Database e usuário dedicados no cluster existente `evolution_api_shared_db`<br>• Armazenamento inicial: 20 GB SSD<br>• Backups automáticos diários (7 dias de retenção): 20 GB<br>• Egress e I/O de consultas | • Storage SSD: \$0.170 / GB / mês<br>• Backup Storage: \$0.080 / GB / mês | **\$5.00 – \$8.00** |
+| **Cloud Storage (`gs://paralax-prod-anero-crm-storage`)** | • Storage Standard: ~50 GB de mídias, fotos de cardápio e comprovantes<br>• Operações Classe A (upload/list): ~15.000 ops/mês<br>• Operações Classe B (downloads/views): ~60.000 ops/mês<br>• Tráfego de saída (egress público): ~20 GB/mês | • Storage: \$0.020 / GB / mês<br>• Classe A: \$0.005 / 1k ops<br>• Classe B: \$0.0004 / 1k ops<br>• Egress Internet: \$0.12 / GB | **\$3.50 – \$6.00** |
+| **Memorystore Redis (Index DB 2)** | • Sessões do ActionCable, cache de contatos e filas do Sidekiq<br>• Consumo de memória estimado: ~150 MB a 300 MB | Compartilhado na instância existente de 1 GB (`evolution_api_shared_cache`) | **\$0.00** (Sem custo marginal) |
+| **Cloud Load Balancing & Gateway API** | • Hostname `anerocafe.paralax.ia.br` sob o `paralax-gateway` existente<br>• Emissão e renovação de certificado TLS Let's Encrypt via Cert-Manager<br>• Volume de dados processados: ~25 GB/mês | • Forwarding Rules adicionais: \$0.00 (reaproveita porta 443)<br>• Processamento: \$0.008 / GB | **\$1.00 – \$2.50** |
+| **Secret Manager** | • 7 segredos corporativos dedicados (1 versão ativa cada)<br>• Operações de leitura/acesso na inicialização dos pods (~5.000 chamadas/mês) | • Versões ativas: \$0.06 / segredo / mês<br>• Operações: \$0.03 / 10k chamadas | **\$0.50 – \$1.00** |
+| **Cloud Build & CI/CD Runners** | • ~20 builds/deploys de releases e correções por mês<br>• Atualização paralela dos manifestos GitOps da Anero Café (~2 min adicionais por esteira) | • Máquina padrão Cloud Build: \$0.003 / minuto além dos 2.500 min gratuitos | **\$1.50 – \$3.00** |
+| **Observabilidade (Cloud Logging & Tracing)** | • Ingestão de logs dos pods `crm-anero` (~8 GB a 15 GB/mês)<br>• Métrica e healthcheck policies | • Cota gratuita: 50 GB/mês por projeto<br>• Excedente: \$0.50 / GB | **\$2.00 – \$4.00** |
+| **TOTAL MENSAL ESTIMADO (CENÁRIO A)** | **Instância Dedicada Otimizada / Compartilhada** | — | **\$31.50 – \$52.50 USD**<br>*(~R\$ 175,00 – R\$ 290,00 / mês)* |
+
+---
+
+### 7.2. Comparativo com Cenário B (Hard Isolation / 100% Dedicado)
+
+Caso haja exigência de conformidade contratual ou auditoria exigindo instâncias de máquinas virtuais e bancos isolados fisicamente:
+
+| Componente | Especificação Dedicada | Custo Mensal Estimado (USD) |
+|---|---|---|
+| **GKE Node Pool Dedicado** | 1 nó `e2-standard-2` (2 vCPU, 8 GB RAM) on-demand 24/7 | ~\$48.90 |
+| **Cloud SQL Dedicado (HA)** | Instância `db-g1-small` Regional (Alta Disponibilidade) + 20 GB SSD | ~\$58.00 |
+| **Memorystore Redis Dedicado** | 1 GB Basic Tier dedicado | ~\$36.00 |
+| **Gateway, Storage, Secrets & Egress** | Recursos isolados, tráfego de rede e armazenamento | ~\$12.00 |
+| **TOTAL MENSAL ESTIMADO (CENÁRIO B)** | **Infraestrutura 100% Dedicada** | **~\$154.90 USD** *(~R\$ 850,00 / mês)* |
+
+---
+
+### 7.3. Diretrizes de Governança FinOps
+1. **Adoção do Cenário A:** Garante isolamento total a nível de aplicação, tenant, banco de dados e armazenamento de arquivos, economizando **mais de 70%** em relação ao provisionamento de instâncias de VM isoladas.
+2. **Workers em Spot Nodes:** Manter o worker Sidekiq (`deployment-worker.yaml`) configurado com `nodeSelector` / tolerations para o pool Spot, reduzindo o custo de processamento em até 60%.
+3. **Lifecycle de Mídias no Cloud Storage:** Configurar regra de transição de ciclo de vida (Object Lifecycle Management) para mover anexos com mais de 90 dias para a classe *Nearline* (\$0.010/GB), garantindo previsibilidade de custo a longo prazo.
+
