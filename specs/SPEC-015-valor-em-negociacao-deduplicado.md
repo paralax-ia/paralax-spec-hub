@@ -18,6 +18,19 @@ target_repositories:
 - repo: paralax-ia/argocd
   wave: 3
   role: gitops
+prompts:
+- name: vehicles/pipeline_classifier
+  target_repo: paralax-ia/customer-support-vehicles
+  file: vehicles/pipeline_rules.py
+  symbol: DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE
+  label: draft
+  description: "Evolução do classificador pós-turno para extração estruturada de vehicle_stock_id e deal_value nos custom_fields, diferenciando busca genérica por orçamento de negociação de ativo específico de estoque."
+- name: vehicles/system_instruction
+  target_repo: paralax-ia/customer-support-vehicles
+  file: vehicles/prompts.py
+  symbol: INSTRUCTION
+  label: draft
+  description: "Reforço nas diretrizes da Isa para referenciar consistentemente a URL/código de estoque e valor nominal do veículo ao avançar para simulação, proposta ou visita presencial."
 status: DRAFT
 ---
 
@@ -34,7 +47,7 @@ status: DRAFT
 > **Diretriz Mandatória de Não-Modificação do CRM:** Zero alterações no código do backend `evo-ai-crm-community`. Todos os relatórios analíticos, dashboards e contadores de Kanban utilizam estritamente o mecanismo nativo de agregação de `services_total_value` em `PipelineItem`.  
 > **Repositórios Impactados (Ondas Topológicas):**  
 > - `paralax-ia/paralax-evo-crm` (Onda 1 - SDK Python: Métodos genéricos de leitura detalhada de pipeline e manipulação tipada de `services` em `custom_fields`)  
-> - `paralax-ia/customer-support-vehicles` (Onda 2 - Agente de IA: Extração de ativo de estoque, detecção de concorrência e atribuição de valor ao estágio mais avançado)  
+> - `paralax-ia/customer-support-vehicles` (Onda 2 - Agente de IA: Extração de ativo de estoque, detecção de concorrência, prompts e atribuição de valor ao estágio mais avançado)  
 > - `paralax-ia/argocd` (Onda 3 - GitOps: Validação declarativa dos manifestos e variáveis de ambiente)
 
 ---
@@ -99,6 +112,7 @@ Se o agente atribuir ingenuamente o valor de R$ 110.000 ao card de cada um desse
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │              ONDA 2: customer-support-vehicles (Agente de IA)          │
+│  • Prompts no Langfuse: vehicles/pipeline_classifier & persona         │
 │  • Extração de vehicle_stock_id e deal_value no classificador LLM      │
 │  • Callback pós-turno de concorrência automotiva:                      │
 │    - Mapeia cards ativos no pipeline com o mesmo vehicle_stock_id      │
@@ -152,10 +166,25 @@ class PipelineItemService(BaseModel):
 
 Toda a regra de negócio automotiva, estoque e deduplicação reside no agente.
 
-#### 3.2.1. Metadados e Extração no LLM (`vehicles/pipeline_rules.py`)
-Novos campos adicionados aos metadados comerciais e ao classificador:
-- `vehicle_stock_id`: Identificador canônico do veículo no estoque da concessionária (ex: slug do anúncio extraído do site `brasiliaautomoveis.com.br` ou código interno retornado pela ferramenta `vehicle_search`).
-- `deal_value`: Valor monetário numérico do veículo selecionado/proposto (ex: `110000.0`).
+#### 3.2.1. Metadados e Chaves Estruturadas (`vehicles/pipeline_rules.py`)
+Novos campos adicionados à tupla `CUSTOM_FIELD_KEYS` e ao classificador:
+- `vehicle_stock_id`: Identificador canônico do veículo no estoque da concessionária (ex: slug do anúncio extraído do site `brasiliaautomoveis.com.br` como `"corolla-xei-20-flex-2021"` ou código interno retornado pela ferramenta `vehicle_search`).
+- `deal_value`: Valor monetário numérico do veículo selecionado/negociado (ex: `110000.0`).
+
+```python
+CUSTOM_FIELD_KEYS = (
+    "desired_vehicle_model",
+    "desired_vehicle_make",
+    "budget_max",
+    "has_trade_in",
+    "trade_in_details",
+    "financing_interest",
+    "test_drive_requested",
+    "preferred_contact_time",
+    "vehicle_stock_id",
+    "deal_value",
+)
+```
 
 #### 3.2.2. Lógica de Deduplicação de Veículo Concorrente
 No callback pós-turno (`after_agent_pipeline_callback` em `vehicles/shared_libraries/callbacks.py`):
@@ -187,7 +216,82 @@ No callback pós-turno (`after_agent_pipeline_callback` em `vehicles/shared_libr
 
 ---
 
-## 4. Fluxo de Execução Sequencial
+## 4. Governança e Alterações de Prompts
+
+A captura de `vehicle_stock_id` e `deal_value` depende de sintonia fina em dois prompts do ecossistema: o **classificador pós-turno de pipeline** (que extrai os metadados) e a **instrução de persona do agente** (que contextualiza a interação).
+
+### 4.1. Prompt do Classificador (`vehicles/pipeline_classifier`)
+
+* **Arquivo de Origem:** `vehicles/pipeline_rules.py` (`DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE`)
+* **Langfuse Prompt Name:** `vehicles/pipeline_classifier`
+* **Label durante Implementação:** `draft` (promovido para `production` após aprovação do PR da spec)
+* **Idioma da Instrução:** Inglês (com restrição mandatória de que o campo `reason` seja em PT-BR)
+
+#### Alterações no Template do Prompt:
+Adiciona-se a diretriz explícita de extração para diferenciar **busca aberta/orçamento genérico** de **negociação de ativo específico em estoque**:
+
+```text
+### Extraction Guidelines for Vehicle Assets & Negotiation Values (Mandatory):
+1. **Generic Inquiries / Broad Budgets:**
+   - If the customer is only asking about a price range or category without a specific car selected (e.g., "procuro carros até 100 mil" or "tem sedãs automáticos?"):
+     - Extract `budget_max` with the numeric limit (e.g., 100000).
+     - Set `vehicle_stock_id = null` and `deal_value = null`.
+2. **Specific Stock Vehicle in Negotiation:**
+   - If the customer focuses on, simulates, or negotiates a SPECIFIC vehicle presented by the assistant or from an ad URL/link (e.g., "gostei do Corolla 2021 de 110 mil", "vamos agendar visita para ver o Civic 2020", or user sent an ad link):
+     - Extract `vehicle_stock_id`: the canonical ad slug, URL segment, or unique stock ID of that vehicle (e.g., "corolla-xei-20-flex-2021-brasilia-df").
+     - Extract `deal_value`: the exact numeric price of that vehicle (e.g., 110000.0).
+     - Extract `desired_vehicle_model` and `desired_vehicle_make`.
+```
+
+#### Diff no Prompt Template (`DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE`):
+```diff
+ ### Mandatory Classification Rules:
+    - Choose `target_stage_name` strictly from the stages listed in the CRM sequence.
+    - Set `stage_changed` to true whenever `target_stage_name` differs from `previous_stage` (whether advance or regression).
+-   - Extract in `custom_fields` all identified automotive commercial data (desired_vehicle_model, desired_vehicle_make, budget_max, has_trade_in, trade_in_details, financing_interest, test_drive_requested, preferred_contact_time).
++   - Extract in `custom_fields` all identified automotive commercial data:
++     * desired_vehicle_model, desired_vehicle_make
++     * budget_max (when lead states a general price ceiling)
++     * vehicle_stock_id (canonical ad slug or stock ID when a specific car is identified)
++     * deal_value (float price of the specific vehicle in negotiation)
++     * has_trade_in, trade_in_details, financing_interest, test_drive_requested, preferred_contact_time
+    - **CRITICAL LANGUAGE RESTRICTION:** The `reason` field MUST be written in Portuguese (PT-BR).
+```
+
+---
+
+### 4.2. Prompt de Persona da Assistente (`vehicles/system_instruction` / Isa)
+
+* **Arquivo de Origem:** `vehicles/prompts.py` (`INSTRUCTION`)
+* **Langfuse Prompt Name:** `vehicles/system_instruction`
+* **Label durante Implementação:** `draft`
+
+#### Reforço Instrucional na Persona:
+O agente Isa já replica integralmente as saídas das ferramentas `get_vehicle_details` (que contêm o link `🔗 *Veja o anúncio:* https://brasiliaautomoveis.com.br/veiculo/...` e o valor).  
+Adiciona-se uma diretriz suplementar na seção `<response_style_and_formatting>` para assegurar consistência no avanço de propostas e agendamentos:
+
+```markdown
+<deal_and_scheduling_coherence>
+Ao avançar para simulação de financiamento, negociação de entrada, avaliação de troca ou agendamento de visita presencial:
+1. Sempre confirme explicitamente o modelo exato e o valor anunciado do veículo em negociação (ex: "Confirmando o agendamento para o Toyota Corolla XEi 2021 no valor de R$ 110.000...").
+2. Isso garante rastreabilidade comercial imediata e associação inequívoca do ativo no histórico de atendimento.
+</deal_and_scheduling_coherence>
+```
+
+---
+
+### 4.3. Ciclo de Vida e Promoção no Langfuse
+
+1. **Fase de Desenvolvimento (Modo `draft`):**
+   * Os prompts `vehicles/pipeline_classifier` e `vehicles/system_instruction` são versionados no Langfuse com a label `draft`.
+   * Os testes unitários e de integração do repositório `customer-support-vehicles` validam a nova versão contra a label `draft` usando fixtures controladas.
+2. **Fase de Homologação e Merge (Promoção para `production`):**
+   * Ao aprovar e mergear a spec e o PR da Onda 2, os prompts são promovidos para a label `production` no Langfuse.
+   * A aplicação em execução no GKE passa a carregar deterministicamente a versão produtiva sem necessidade de novo build.
+
+---
+
+## 5. Fluxo de Execução Sequencial
 
 ```mermaid
 sequenceDiagram
@@ -223,13 +327,14 @@ sequenceDiagram
 
 ---
 
-## 5. Critérios de Aceitação (Gherkin)
+## 6. Critérios de Aceitação (Gherkin)
 
 ### Cenário 1: Atribuição de valor em negociação para lead único
 - **Dado** que o lead selecionou um veículo de estoque com valor de R$ 95.000
 - **E** nenhum outro card ativo no funil disputa este mesmo veículo
 - **Quando** a conversa for processada e o card for movimentado de etapa
-- **Então** o SDK deve registrar em `custom_fields['services']` o serviço correspondente no valor de R$ 95.000
+- **Então** o LLM classificador deve extrair `vehicle_stock_id` e `deal_value=95000.0`
+- **E** o SDK deve registrar em `custom_fields['services']` o serviço correspondente no valor de R$ 95.000
 - **E** o CRM deve computar `services_total_value = 95000.0` para este card.
 
 ### Cenário 2: Deduplicação de valor quando múltiplos leads disputam o mesmo veículo
@@ -262,7 +367,7 @@ sequenceDiagram
 
 ---
 
-## 6. Plano de Implementação e Verificação
+## 7. Plano de Implementação e Verificação
 
 ### Onda 1: `paralax-ia/paralax-evo-crm`
 1. Modelagem Pydantic `PipelineItemService` em `paralax/evo/crm/models.py`.
@@ -275,10 +380,12 @@ sequenceDiagram
 4. Validação completa via `just verify`.
 
 ### Onda 2: `paralax-ia/customer-support-vehicles`
-1. Adição de `vehicle_stock_id` e `deal_value` na extração de `pipeline_rules.py`.
-2. Implementação da lógica de resolução de líder de ativo e rebalanceamento em `vehicles/pipeline_rules.py` e `vehicles/shared_libraries/callbacks.py`.
-3. Testes unitários com TDD simulando múltiplos leads concorrentes, promoção e regressão de líder em `tests/unit/test_competing_vehicle_pipeline.py`.
-4. Validação completa via `just verify`.
+1. Versionamento do prompt `vehicles/pipeline_classifier` no Langfuse (label `draft`) com extração de `vehicle_stock_id` e `deal_value`.
+2. Atualização de `vehicles/prompts.py` (Isa) para reforço instrucional de valor e confirmação de estoque.
+3. Adição de `vehicle_stock_id` e `deal_value` na tupla `CUSTOM_FIELD_KEYS` e em `pipeline_rules.py`.
+4. Implementação da lógica de resolução de líder de ativo e rebalanceamento em `vehicles/pipeline_rules.py` e `vehicles/shared_libraries/callbacks.py`.
+5. Testes unitários com TDD simulando múltiplos leads concorrentes, promoção e regressão de líder em `tests/unit/test_competing_vehicle_pipeline.py`.
+6. Validação completa via `just verify`.
 
 ### Onda 3: `paralax-ia/argocd`
 1. Validação de manifestos e checagens K8s via `just verify`.
