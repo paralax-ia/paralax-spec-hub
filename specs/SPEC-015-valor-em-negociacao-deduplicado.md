@@ -25,12 +25,12 @@ prompts:
   symbol: DEFAULT_STAGE_CLASSIFICATION_PROMPT_TEMPLATE
   label: draft
   description: "Evolução do classificador pós-turno para extração estruturada de vehicle_stock_id e deal_value nos custom_fields, diferenciando busca genérica por orçamento de negociação de ativo específico de estoque."
-- name: vehicles/system_instruction
+- name: vehicles/vehicle_search_agent_instruction
   target_repo: paralax-ia/customer-support-vehicles
   file: vehicles/prompts.py
   symbol: INSTRUCTION
   label: draft
-  description: "Reforço nas diretrizes da Isa para referenciar consistentemente a URL/código de estoque e valor nominal do veículo ao avançar para simulação, proposta ou visita presencial."
+  description: "Reforço nas diretrizes dinâmicas da Isa para referenciar consistentemente a URL/código de estoque e valor nominal do veículo ao avançar para simulação, proposta ou visita presencial."
 status: DRAFT
 ---
 
@@ -260,10 +260,10 @@ Adiciona-se a diretriz explícita de extração para diferenciar **busca aberta/
 
 ---
 
-### 4.2. Prompt de Persona da Assistente (`vehicles/system_instruction` / Isa)
+### 4.2. Prompt de Persona da Assistente (`vehicles/vehicle_search_agent_instruction` / Isa)
 
-* **Arquivo de Origem:** `vehicles/prompts.py` (`INSTRUCTION`)
-* **Langfuse Prompt Name:** `vehicles/system_instruction`
+* **Arquivo de Origem:** `vehicles/prompts.py` (`INSTRUCTION`) e `vehicles/agent.py` (`prompt_manager`)
+* **Langfuse Prompt Name:** `vehicles/vehicle_search_agent_instruction`
 * **Label durante Implementação:** `draft`
 
 #### Reforço Instrucional na Persona:
@@ -283,7 +283,7 @@ Ao avançar para simulação de financiamento, negociação de entrada, avaliaç
 ### 4.3. Ciclo de Vida e Promoção no Langfuse
 
 1. **Fase de Desenvolvimento (Modo `draft`):**
-   * Os prompts `vehicles/pipeline_classifier` e `vehicles/system_instruction` são versionados no Langfuse com a label `draft`.
+   * Os prompts `vehicles/pipeline_classifier` e `vehicles/vehicle_search_agent_instruction` são versionados no Langfuse com a label `draft`.
    * Os testes unitários e de integração do repositório `customer-support-vehicles` validam a nova versão contra a label `draft` usando fixtures controladas.
 2. **Fase de Homologação e Merge (Promoção para `production`):**
    * Ao aprovar e mergear a spec e o PR da Onda 2, os prompts são promovidos para a label `production` no Langfuse.
