@@ -218,7 +218,9 @@ No callback pós-turno (`after_agent_pipeline_callback` em `vehicles/shared_libr
 
 ## 4. Governança e Alterações de Prompts
 
-A captura de `vehicle_stock_id` e `deal_value` depende de sintonia fina em dois prompts do ecossistema: o **classificador pós-turno de pipeline** (que extrai os metadados) e a **instrução de persona do agente** (que contextualiza a interação).
+> **Regra Corporativa de Idioma em Prompts:** Em consonância com as diretrizes do ecossistema Paralax IA e da SPEC-014, **todos os prompts de sistema, instruções de persona e templates de raciocínio devem ser redigidos estritamente em Inglês**, mantendo restrições explícitas de idioma apenas para a fala com o cliente final ou campos textuais estruturados de saída (como o campo `reason`, que deve ser em PT-BR).
+
+A captura de `vehicle_stock_id` e `deal_value` depende de sintonia fina em dois prompts do ecossistema: o **classificador pós-turno de pipeline** (que extrai os metadados) e a **instrução dinâmica de persona do agente** (que contextualiza a interação).
 
 ### 4.1. Prompt do Classificador (`vehicles/pipeline_classifier`)
 
@@ -265,16 +267,17 @@ Adiciona-se a diretriz explícita de extração para diferenciar **busca aberta/
 * **Arquivo de Origem:** `vehicles/prompts.py` (`INSTRUCTION`) e `vehicles/agent.py` (`prompt_manager`)
 * **Langfuse Prompt Name:** `vehicles/vehicle_search_agent_instruction`
 * **Label durante Implementação:** `draft`
+* **Idioma da Instrução:** Estritamente em Inglês (com exemplos e diálogo com o cliente em PT-BR)
 
 #### Reforço Instrucional na Persona:
 O agente Isa já replica integralmente as saídas das ferramentas `get_vehicle_details` (que contêm o link `🔗 *Veja o anúncio:* https://brasiliaautomoveis.com.br/veiculo/...` e o valor).  
-Adiciona-se uma diretriz suplementar na seção `<response_style_and_formatting>` para assegurar consistência no avanço de propostas e agendamentos:
+Adiciona-se uma diretriz suplementar em inglês na seção `<response_style_and_formatting>` para assegurar consistência no avanço de propostas e agendamentos:
 
 ```markdown
 <deal_and_scheduling_coherence>
-Ao avançar para simulação de financiamento, negociação de entrada, avaliação de troca ou agendamento de visita presencial:
-1. Sempre confirme explicitamente o modelo exato e o valor anunciado do veículo em negociação (ex: "Confirmando o agendamento para o Toyota Corolla XEi 2021 no valor de R$ 110.000...").
-2. Isso garante rastreabilidade comercial imediata e associação inequívoca do ativo no histórico de atendimento.
+When advancing to financing simulations, down payment negotiations, trade-in appraisals, or scheduling an in-person store visit:
+1. Always explicitly confirm the exact vehicle model and its advertised sale price (e.g., "Confirmando o agendamento para o Toyota Corolla XEi 2021 no valor de R$ 110.000...").
+2. This ensures immediate commercial traceability and unambiguous association of the stock asset in the conversation history.
 </deal_and_scheduling_coherence>
 ```
 
