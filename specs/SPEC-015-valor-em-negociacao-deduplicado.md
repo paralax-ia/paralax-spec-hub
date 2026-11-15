@@ -31,7 +31,7 @@ prompts:
   symbol: INSTRUCTION
   label: draft
   description: "Reforço nas diretrizes dinâmicas da Isa para referenciar consistentemente a URL/código de estoque e valor nominal do veículo ao avançar para simulação, proposta ou visita presencial."
-status: DRAFT
+status: READY
 ---
 
 # SPEC-015: Valor em Negociação e Deduplicação de Serviços por Ativo no Funil de Vendas
@@ -40,7 +40,7 @@ status: DRAFT
 > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
 > **Scope:** Platform & Product-Specific (Comercial, Veículos e Gestão de Serviços no CRM)  
 > **Bounded Context:** CRM, Gestão de Serviços & Funil Comercial (Supporting Subdomain)  
-> **Status:** DRAFT  
+> **Status:** READY  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-11-14  
 > **Arquitetura 12-Factor:** Zero arquivos de configuração no Git; parametrização via variáveis de ambiente centralizadas no ArgoCD.  
@@ -372,23 +372,23 @@ sequenceDiagram
 
 ## 7. Plano de Implementação e Verificação
 
-### Onda 1: `paralax-ia/paralax-evo-crm`
-1. Modelagem Pydantic `PipelineItemService` em `paralax/evo/crm/models.py`.
-2. Implementação dos métodos no `CRMAPIClient`:
-   - `get_pipeline_details(pipeline_id)`
-   - `update_pipeline_item_services(pipeline_id, item_id, services, custom_fields_extra)`
-   - `set_pipeline_item_service(pipeline_id, item_id, name, value, custom_fields_extra)`
-   - `clear_pipeline_item_services(pipeline_id, item_id, custom_fields_extra)`
-3. Suíte de testes unitários com TDD em `tests/unit/test_pipeline_services.py`.
-4. Validação completa via `just verify`.
+### Onda 1: `paralax-ia/paralax-evo-crm` (PR [#39](https://github.com/paralax-ia/paralax-evo-crm/pull/39))
+- [x] Modelagem Pydantic `PipelineItemService` em `paralax/evo/crm/models.py`.
+- [x] Implementação dos métodos no `CRMAPIClient`:
+  - `get_pipeline_details(pipeline_id)`
+  - `update_pipeline_item_services(pipeline_id, item_id, services, custom_fields_extra)`
+  - `set_pipeline_item_service(pipeline_id, item_id, name, value, custom_fields_extra)`
+  - `clear_pipeline_item_services(pipeline_id, item_id, custom_fields_extra)`
+- [x] Suíte de 6 novos testes unitários com TDD em `tests/paralax/evo/crm/test_client_pipeline_services.py` (total de 103 testes passando).
+- [x] Validação completa via `just verify` (Ruff, Isort, Pyright, Complexipy).
 
-### Onda 2: `paralax-ia/customer-support-vehicles`
-1. Versionamento do prompt `vehicles/pipeline_classifier` no Langfuse (label `draft`) com extração de `vehicle_stock_id` e `deal_value`.
-2. Atualização de `vehicles/prompts.py` (Isa) para reforço instrucional de valor e confirmação de estoque.
-3. Adição de `vehicle_stock_id` e `deal_value` na tupla `CUSTOM_FIELD_KEYS` e em `pipeline_rules.py`.
-4. Implementação da lógica de resolução de líder de ativo e rebalanceamento em `vehicles/pipeline_rules.py` e `vehicles/shared_libraries/callbacks.py`.
-5. Testes unitários com TDD simulando múltiplos leads concorrentes, promoção e regressão de líder em `tests/unit/test_competing_vehicle_pipeline.py`.
-6. Validação completa via `just verify`.
+### Onda 2: `paralax-ia/customer-support-vehicles` (PR [#84](https://github.com/paralax-ia/customer-support-vehicles/pull/84))
+- [x] Versionamento do prompt `vehicles/pipeline_classifier` no Langfuse (label `draft`) com extração de `vehicle_stock_id` e `deal_value`.
+- [x] Atualização de `vehicles/prompts.py` (Isa) para reforço instrucional de valor e confirmação de estoque (`<deal_and_scheduling_coherence>`).
+- [x] Adição de `vehicle_stock_id` e `deal_value` na tupla `CUSTOM_FIELD_KEYS` e em `pipeline_rules.py`.
+- [x] Implementação da lógica de resolução de líder de ativo e rebalanceamento em `vehicles/pipeline_rules.py` (`resolve_competing_vehicle_allocations`) e `vehicles/shared_libraries/callbacks.py`.
+- [x] Testes unitários com TDD simulando múltiplos leads concorrentes, promoção e regressão de líder em `tests/unit/test_competing_vehicle_pipeline.py` (25 testes de pipeline passando).
+- [x] Validação completa via `just verify` (Ruff, Isort, Complexipy, 12-Factor).
 
 ### Onda 3: `paralax-ia/argocd`
-1. Validação de manifestos e checagens K8s via `just verify`.
+- [x] Validação de manifestos e checagens K8s (reutilização das variáveis `ENABLE_SALES_PIPELINE` e `SALES_PIPELINE_NAME` existentes).
