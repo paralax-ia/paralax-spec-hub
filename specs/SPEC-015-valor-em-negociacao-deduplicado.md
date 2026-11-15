@@ -31,7 +31,7 @@ prompts:
   symbol: INSTRUCTION
   label: draft
   description: "Reforço nas diretrizes dinâmicas da Isa para referenciar consistentemente a URL/código de estoque e valor nominal do veículo ao avançar para simulação, proposta ou visita presencial."
-status: READY
+status: IMPLEMENTED
 ---
 
 # SPEC-015: Valor em Negociação e Deduplicação de Serviços por Ativo no Funil de Vendas
@@ -40,7 +40,7 @@ status: READY
 > **Business Capability:** [`customer-relationship-management`](../capabilities/customer-relationship-management/capability.yaml)  
 > **Scope:** Platform & Product-Specific (Comercial, Veículos e Gestão de Serviços no CRM)  
 > **Bounded Context:** CRM, Gestão de Serviços & Funil Comercial (Supporting Subdomain)  
-> **Status:** READY  
+> **Status:** IMPLEMENTED  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-11-14  
 > **Arquitetura 12-Factor:** Zero arquivos de configuração no Git; parametrização via variáveis de ambiente centralizadas no ArgoCD.  
