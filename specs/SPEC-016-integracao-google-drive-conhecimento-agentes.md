@@ -74,6 +74,11 @@ Esta especificação define um mecanismo universal, desacoplado e nativo de nuve
 
 ## 2. Escopo e Repositórios Afetados (Ondas Topológicas)
 
+- [ ] **Sub-tarefa 1 (`paralax-ia/terraform`):** [Onda 1] Habilitação da API `drive.googleapis.com` em `workload_project_apis` e exportação dos e-mails de Service Account dos agentes.
+- [ ] **Sub-tarefa 2 (`paralax-ia/paralax-agents-common`):** [Onda 2] Implementação do módulo `GoogleDriveContentManager` em `paralax.agents.common.drive` com suporte a Workload Identity, multiformato (Docs, Sheets, Markdown) e Cache-Aside por `modifiedTime`.
+- [ ] **Sub-tarefa 3 (`paralax-ia/argocd`):** [Onda 3] Declaração declarativa 12-Factor dos IDs de documentos do Google Drive (`GOOGLE_DRIVE_PF_FILE_ID` e `GOOGLE_DRIVE_PJ_FILE_ID`).
+- [ ] **Sub-tarefa 4 (`paralax-ia/anero-cafe-support`):** [Onda 3] Adoção piloto das ferramentas de catálogo baseadas no Drive, substituindo o web scraping e isolando bases PF e PJ.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      ONDA 1: INFRAESTRUTURA GCP                        │

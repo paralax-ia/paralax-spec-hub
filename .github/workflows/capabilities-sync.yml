@@ -3,7 +3,6 @@ name: Business Capabilities Continuous Sync
 on:
   workflow_dispatch:
   schedule:
-    # Executa todo domingo à meia-noite UTC
     - cron: '0 0 * * 0'
 
 jobs:
@@ -30,18 +29,20 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
-      - name: Instalar Dependências
-        run: |
-          pip install pyyaml pydantic redis rich click
+      - name: Instalar uv
+        run: pip install uv
+
+      - name: Sincronizar Dependências do Flywheel (uv.lock canônico)
+        run: uv sync --frozen --project .flywheel_src
 
       - name: Executar Auditoria e Sincronização via Agentic Flywheel
         env:
           PYTHONPATH: '.flywheel_src/src'
         run: |
-          python3 -m flywheel.capabilities audit --spec-hub-dir .
-          python3 -m flywheel.capabilities sync --spec-hub-dir .
+          uv run --project .flywheel_src --frozen python -m flywheel.capabilities audit --spec-hub-dir .
+          uv run --project .flywheel_src --frozen python -m flywheel.capabilities sync --spec-hub-dir .
 
       - name: Verificar se há alterações nos contratos
         id: git-check

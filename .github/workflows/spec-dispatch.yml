@@ -2,7 +2,7 @@ name: Spec Fan-Out & Branch Orchestrator
 
 on:
   pull_request:
-    types: [opened, labeled]
+    types: [opened, synchronize, labeled]
     paths:
       - 'specs/**'
   workflow_dispatch:
@@ -29,6 +29,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && (
         github.event.action == 'opened' ||
+        github.event.action == 'synchronize' ||
         contains(github.event.pull_request.labels.*.name, 'spec-ready')
       ))
     runs-on: ubuntu-latest
@@ -53,11 +54,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
-      - name: Instalar Dependências do Orquestrador
-        run: |
-          pip install pyyaml pydantic redis rich click
+      - name: Instalar uv
+        run: pip install uv
+
+      - name: Sincronizar Dependências do Flywheel (uv.lock canônico)
+        run: uv sync --frozen --project .flywheel_src
 
       - name: Gerar Token de Instalação da GitHub App (se secrets disponíveis)
         id: app-token
@@ -76,7 +79,6 @@ jobs:
             PR_NUM="${{ inputs.hub_pr_number }}"
             DRY_RUN="${{ inputs.dry_run }}"
           else
-            # No pull_request, identifica qual arquivo de spec raiz foi alterado (ignora subdiretorios como .harness)
             SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/SPEC-[^/]+\.md$' | head -n 1)
             if [ -z "$SPEC_FILE" ]; then
               SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/[^/]+\.md$' | head -n 1)
@@ -104,7 +106,6 @@ jobs:
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
           DISPATCH_TOKEN: ${{ secrets.FLYWHEEL_DISPATCH_TOKEN }}
-          PYTHONPATH: .flywheel_src/src
         run: |
           if [ -n "$APP_TOKEN" ]; then
             export GH_TOKEN="$APP_TOKEN"
@@ -125,9 +126,4 @@ jobs:
             EXTRA_ARGS="$EXTRA_ARGS --dry-run"
           fi
 
-          python3 -m flywheel.fanout \
-            --spec "${{ steps.params.outputs.spec_file }}" \
-            --manifest manifest.yaml \
-            --hub-repo "${{ github.repository }}" \
-            $EXTRA_ARGS
-
+          uv run --project .flywheel_src --frozen python -m flywheel.fanout             --spec "${{ steps.params.outputs.spec_file }}"             --manifest manifest.yaml             --hub-repo "${{ github.repository }}"             $EXTRA_ARGS
