@@ -41,8 +41,8 @@ status: DRAFT
 > **Repositórios Impactados (Ondas Topológicas):**  
 > - `paralax-ia/terraform` (Onda 1 - Infraestrutura: Habilitação da API Google Drive e governança de SAs)  
 > - `paralax-ia/paralax-agents-common` (Onda 2 - Biblioteca Compartilhada: Cliente Google Drive com Workload Identity, Cache Inteligente e suporte a Docs, Sheets e Markdown)  
-> - `paralax-ia/argocd` (Onda 3 - GitOps: Declaração 12-Factor dos IDs de documentos do Drive)  
-> - `paralax-ia/anero-cafe-support` (Onda 3 - Agente Piloto: Adoção das bases de dados PF e PJ via Google Drive, substituindo web scraping)  
+> - `paralax-ia/argocd` (Onda 3 - GitOps: Declaração 12-Factor do ID do documento de catálogo no Drive)  
+> - `paralax-ia/anero-cafe-support` (Onda 3 - Agente Piloto: Adoção da base de catálogo via Google Drive, substituindo web scraping, e estrita proibição de envio de preços PJ por agentes de IA — envio exclusivo por operador humano)  
 
 ---
 
@@ -76,8 +76,8 @@ Esta especificação define um mecanismo universal, desacoplado e nativo de nuve
 
 - [ ] **Sub-tarefa 1 (`paralax-ia/terraform`):** [Onda 1] Habilitação da API `drive.googleapis.com` em `workload_project_apis` e exportação dos e-mails de Service Account dos agentes.
 - [ ] **Sub-tarefa 2 (`paralax-ia/paralax-agents-common`):** [Onda 2] Implementação do módulo `GoogleDriveContentManager` em `paralax.agents.common.drive` com suporte a Workload Identity, multiformato (Docs, Sheets, Markdown) e Cache-Aside por `modifiedTime`.
-- [ ] **Sub-tarefa 3 (`paralax-ia/argocd`):** [Onda 3] Declaração declarativa 12-Factor dos IDs de documentos do Google Drive (`GOOGLE_DRIVE_PF_FILE_ID` e `GOOGLE_DRIVE_PJ_FILE_ID`).
-- [ ] **Sub-tarefa 4 (`paralax-ia/anero-cafe-support`):** [Onda 3] Adoção piloto das ferramentas de catálogo baseadas no Drive, substituindo o web scraping e isolando bases PF e PJ.
+- [ ] **Sub-tarefa 3 (`paralax-ia/argocd`):** [Onda 3] Declaração declarativa 12-Factor do ID do documento de catálogo do Google Drive (`GOOGLE_DRIVE_PF_FILE_ID`). Não há tabela de preços PJ declarada.
+- [ ] **Sub-tarefa 4 (`paralax-ia/anero-cafe-support`):** [Onda 3] Adoção piloto das ferramentas de catálogo baseadas no Drive, substituindo o web scraping. Remoção completa de tabelas de preços corporativos/PJ — nos atendimentos PJ (cadastrados ou não), os preços são enviados unicamente pelo operador humano.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -104,14 +104,21 @@ Esta especificação define um mecanismo universal, desacoplado e nativo de nuve
 │                 ONDA 3: GITOPS & ADOÇÃO NOS AGENTES                    │
 │                                                                        │
 │ 1. paralax-ia/argocd                                                   │
-│    • Injeção de variáveis 12-Factor em `prod/anero-cafe-support`:      │
-│      `GOOGLE_DRIVE_PF_FILE_ID` e `GOOGLE_DRIVE_PJ_FILE_ID`             │
+│    • Injeção de variável 12-Factor em `prod/anero-cafe-support`:       │
+│      `GOOGLE_DRIVE_PF_FILE_ID` (catálogo geral de cafés)               │
+│    • Inexistência de tabela PJ (preços PJ são 100% humanos)            │
 │                                                                        │
 │ 2. paralax-ia/anero-cafe-support                                       │
 │    • Substituição do scraping do site pelas ferramentas locais do Drive│
-│    • Agente 1: Consulta base PJ do Drive com preços de atacado         │
-│    • Agente 2: Consulta base PF do Drive com preços de varejo          │
-│    • Agente 3: Consulta base PJ do Drive com omissão estrita de preços │
+│    • Agente 1 (PJ Cadastrado): Consulta notas/moagens sem preço        │
+│      (`get_coffee_details_without_price`), faz intake de pedidos e     │
+│      despacha notificação ao dono. ZERO preços fornecidos pelo bot.   │
+│    • Agente 2 (Consumidor Final): Consulta base do Drive com preços de │
+│      varejo do site (`get_coffee_details`).                            │
+│    • Agente 3 (Lead PJ): Consulta notas/moagens sem preço             │
+│      (`get_coffee_details_without_price`), qualifica a empresa e       │
+│      despacha notificação ao dono. ZERO preços fornecidos pelo bot.   │
+│    • Somente o operador humano envia cotações e propostas corporativas.│
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -295,13 +302,13 @@ class GoogleDriveContentManager:
 ### 3.3. Onda 3: Adoção no Agente `anero-cafe-support`
 
 1. **Variáveis de Ambiente 12-Factor:**
-   - `GOOGLE_DRIVE_PF_FILE_ID`: ID do documento de catálogo e condições para Consumidores Finais (PF).
-   - `GOOGLE_DRIVE_PJ_FILE_ID`: ID do documento confidencial de atacado para Clientes Corporativos (PJ).
+   - `GOOGLE_DRIVE_PF_FILE_ID`: ID do documento de catálogo no Google Drive (contendo notas sensoriais, variedades e preços de varejo da loja física/site).
+   - *Nota de Negócio:* NÃO EXISTE tabela de preços PJ no sistema. A precificação corporativa é estritamente manual, enviada exclusivamente pelo operador humano.
 2. **Arquitetura das Ferramentas Locais dos Agentes:**
-   - **`coffee_search`:** Executa busca semântica ou por correspondência de termos diretamente sobre os textos sincronizados do Google Drive (sem requisições HTTP ao site).
-   - **`get_coffee_details_retail` (Agente 2):** Retorna características e preços do arquivo PF.
-   - **`get_coffee_details_wholesale` (Agente 1):** Retorna preços de atacado, moagens, caixas e condições de frete do arquivo PJ.
-   - **`get_coffee_details_without_price` (Agente 3):** Retorna apenas as notas e tipos de cafés do arquivo PJ, removendo valores monetários.
+   - **`coffee_search`:** Executa busca por correspondência de termos diretamente sobre os textos sincronizados do Google Drive (sem requisições HTTP ao site).
+   - **`get_coffee_details` (Agente 2):** Retorna características e preços de varejo para o consumidor final (PF).
+   - **`get_coffee_details_without_price` (Agentes 1 e 3):** Retorna apenas as características, notas sensoriais, origem e moagens dos cafés, removendo estritamente qualquer valor monetário. É proibido expor qualquer preço corporativo via bot.
+   - **`notify_owner_corporate_order` (Agentes 1 e 3):** Notifica o proprietário e a equipe comercial no CRM com os dados do cliente e os itens desejados para que o operador humano elabore a proposta e envie os preços.
 
 ---
 
@@ -311,12 +318,19 @@ class GoogleDriveContentManager:
 Funcionalidade: Sincronização de Conhecimento dos Agentes via Google Drive
 
   Cenário: Sincronização inicial com cache inteligente
-    Dado que a variável "GOOGLE_DRIVE_PJ_FILE_ID" está configurada com um ID de Google Doc válido
+    Dado que a variável "GOOGLE_DRIVE_PF_FILE_ID" está configurada com um ID de Google Doc válido
     E que o arquivo foi compartilhado com a Service Account do agente
-    Quando o Agente 1 inicializar e consultar os cafés para um cliente PJ
+    Quando o Agente 2 inicializar e consultar os cafés para um cliente
     Então o conteúdo do documento deve ser carregado via Google Drive API v3
     E armazenado no cache local em memória pelo tempo configurado em TTL
     E as consultas subsequentes dentro da janela de TTL não devem gerar chamadas adicionais de download.
+
+  Cenário: Atendimento corporativo estritamente sem preços
+    Dado um cliente corporativo (PJ cadastrado ou novo lead PJ)
+    Quando o cliente solicitar cotação ou preços de café
+    Então os Agentes 1 e 3 devem omitir qualquer valor monetário
+    E informar que os valores corporativos e a proposta comercial serão enviados diretamente pela diretoria/equipe humana
+    E registrar o pedido/intake via "notify_owner_corporate_order".
 
   Cenário: Atualização dinâmica de preços sem redeploy da aplicação
     Dado que o arquivo no Google Drive teve seus preços de café alterados pelo operador
