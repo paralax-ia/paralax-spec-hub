@@ -37,12 +37,10 @@ jobs:
       - name: Sincronizar Dependências do Flywheel (uv.lock canônico)
         run: uv sync --frozen --project .flywheel_src
 
-      - name: Executar Auditoria e Sincronização via Agentic Flywheel
-        env:
-          PYTHONPATH: '.flywheel_src/src'
+      - name: Executar Auditoria e Sincronização via Harness State
         run: |
-          uv run --project .flywheel_src --frozen python -m flywheel.capabilities audit --spec-hub-dir .
-          uv run --project .flywheel_src --frozen python -m flywheel.capabilities sync --spec-hub-dir .
+          uv run --project .flywheel_src --frozen python -m harness_state.capabilities audit --spec-hub-dir .
+          uv run --project .flywheel_src --frozen python -m harness_state.capabilities sync --spec-hub-dir .
 
       - name: Verificar se há alterações nos contratos
         id: git-check

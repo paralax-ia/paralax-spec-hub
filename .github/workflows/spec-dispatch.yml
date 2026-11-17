@@ -118,12 +118,13 @@ jobs:
           echo "Verificando autenticação no GitHub CLI:"
           gh auth status || true
 
-          EXTRA_ARGS=""
-          if [ -n "${{ steps.params.outputs.pr_number }}" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --hub-pr ${{ steps.params.outputs.pr_number }}"
-          fi
+          MODE_ARG="--mode remote"
           if [ "${{ steps.params.outputs.dry_run }}" = "true" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --dry-run"
+            MODE_ARG="--mode local"
           fi
 
-          uv run --project .flywheel_src --frozen python -m flywheel.fanout             --spec "${{ steps.params.outputs.spec_file }}"             --manifest manifest.yaml             --hub-repo "${{ github.repository }}"             $EXTRA_ARGS
+          uv run --project .flywheel_src harness spec plan \
+            "${{ steps.params.outputs.spec_file }}" \
+            --manifest manifest.yaml \
+            --ci \
+            $MODE_ARG
