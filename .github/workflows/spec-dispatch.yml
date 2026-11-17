@@ -2,7 +2,7 @@ name: Spec Fan-Out & Branch Orchestrator
 
 on:
   pull_request:
-    types: [opened, labeled]
+    types: [opened, synchronize, labeled]
     paths:
       - 'specs/**'
   workflow_dispatch:
@@ -22,6 +22,20 @@ on:
         default: false
         type: boolean
 
+env:
+  HARNESS_REDIS_HOST: ${{ vars.HARNESS_REDIS_HOST || '127.0.0.1' }}
+  HARNESS_REDIS_PORT: ${{ vars.HARNESS_REDIS_PORT || '6379' }}
+  ES_INTERNAL_URL: ${{ vars.ES_INTERNAL_URL || 'http://127.0.0.1:9200' }}
+  ES_EXTERNAL_URL: ${{ vars.ES_EXTERNAL_URL || 'https://es.eduardosan.com:443' }}
+  ES_INDEX: ${{ vars.ES_INDEX || 'harness-sensor-telemetry' }}
+  LLM_INTERNAL_BASE_URL: ${{ vars.LLM_INTERNAL_BASE_URL || 'http://127.0.0.1:11434/v1' }}
+  LLM_EXTERNAL_BASE_URL: ${{ vars.LLM_EXTERNAL_BASE_URL || 'https://ollama.eduardosan.com/v1' }}
+  LLM_DEFAULT_MODEL: ${{ vars.LLM_DEFAULT_MODEL || 'agentic-qwen:7b' }}
+  LLM_JUDGE_MODEL: ${{ vars.LLM_JUDGE_MODEL || 'agentic-qwen' }}
+  SPEC_HUB_ORG: ${{ vars.SPEC_HUB_ORG || 'paralax-ia' }}
+  SPEC_HUB_REPO: ${{ vars.SPEC_HUB_REPO || 'paralax-ia/paralax-spec-hub' }}
+  FLYWHEEL_REPO: ${{ vars.FLYWHEEL_REPO || 'eduardosan/agentic-flywheel' }}
+
 jobs:
   fanout:
     name: "Executar Fan-Out e Abertura de Branches"
@@ -29,9 +43,20 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && (
         github.event.action == 'opened' ||
+        github.event.action == 'synchronize' ||
         contains(github.event.pull_request.labels.*.name, 'spec-ready')
       ))
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     permissions:
       contents: write
       pull-requests: write
@@ -53,11 +78,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
-      - name: Instalar Dependências do Orquestrador
-        run: |
-          pip install pyyaml pydantic redis rich click
+      - name: Instalar uv
+        run: pip install uv
+
+      - name: Sincronizar Dependências do Flywheel (uv.lock canônico)
+        run: uv sync --frozen --project .flywheel_src
 
       - name: Gerar Token de Instalação da GitHub App (se secrets disponíveis)
         id: app-token
@@ -76,7 +103,6 @@ jobs:
             PR_NUM="${{ inputs.hub_pr_number }}"
             DRY_RUN="${{ inputs.dry_run }}"
           else
-            # No pull_request, identifica qual arquivo de spec raiz foi alterado (ignora subdiretorios como .harness)
             SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/SPEC-[^/]+\.md$' | head -n 1)
             if [ -z "$SPEC_FILE" ]; then
               SPEC_FILE=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^specs/[^/]+\.md$' | head -n 1)
@@ -99,12 +125,14 @@ jobs:
           echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
           echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
 
+      - name: Configurar Ambiente CI do Harness
+        run: uv run --project .flywheel_src harness setup --ci
+
       - name: Executar Fan-Out nos Repositórios Spokes
         if: steps.params.outputs.spec_file != ''
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
           DISPATCH_TOKEN: ${{ secrets.FLYWHEEL_DISPATCH_TOKEN }}
-          PYTHONPATH: .flywheel_src/src
         run: |
           if [ -n "$APP_TOKEN" ]; then
             export GH_TOKEN="$APP_TOKEN"
@@ -117,17 +145,13 @@ jobs:
           echo "Verificando autenticação no GitHub CLI:"
           gh auth status || true
 
-          EXTRA_ARGS=""
-          if [ -n "${{ steps.params.outputs.pr_number }}" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --hub-pr ${{ steps.params.outputs.pr_number }}"
-          fi
+          MODE_ARG="--mode remote"
           if [ "${{ steps.params.outputs.dry_run }}" = "true" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --dry-run"
+            MODE_ARG="--mode local"
           fi
 
-          python3 -m flywheel.fanout \
-            --spec "${{ steps.params.outputs.spec_file }}" \
+          uv run --project .flywheel_src harness spec plan \
+            "${{ steps.params.outputs.spec_file }}" \
             --manifest manifest.yaml \
-            --hub-repo "${{ github.repository }}" \
-            $EXTRA_ARGS
-
+            --ci \
+            $MODE_ARG
