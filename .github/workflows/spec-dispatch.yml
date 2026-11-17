@@ -22,6 +22,20 @@ on:
         default: false
         type: boolean
 
+env:
+  HARNESS_REDIS_HOST: ${{ vars.HARNESS_REDIS_HOST || '127.0.0.1' }}
+  HARNESS_REDIS_PORT: ${{ vars.HARNESS_REDIS_PORT || '6379' }}
+  ES_INTERNAL_URL: ${{ vars.ES_INTERNAL_URL || 'http://127.0.0.1:9200' }}
+  ES_EXTERNAL_URL: ${{ vars.ES_EXTERNAL_URL || 'https://es.eduardosan.com:443' }}
+  ES_INDEX: ${{ vars.ES_INDEX || 'harness-sensor-telemetry' }}
+  LLM_INTERNAL_BASE_URL: ${{ vars.LLM_INTERNAL_BASE_URL || 'http://127.0.0.1:11434/v1' }}
+  LLM_EXTERNAL_BASE_URL: ${{ vars.LLM_EXTERNAL_BASE_URL || 'https://ollama.eduardosan.com/v1' }}
+  LLM_DEFAULT_MODEL: ${{ vars.LLM_DEFAULT_MODEL || 'agentic-qwen:7b' }}
+  LLM_JUDGE_MODEL: ${{ vars.LLM_JUDGE_MODEL || 'agentic-qwen' }}
+  SPEC_HUB_ORG: ${{ vars.SPEC_HUB_ORG || 'paralax-ia' }}
+  SPEC_HUB_REPO: ${{ vars.SPEC_HUB_REPO || 'paralax-ia/paralax-spec-hub' }}
+  FLYWHEEL_REPO: ${{ vars.FLYWHEEL_REPO || 'eduardosan/agentic-flywheel' }}
+
 jobs:
   fanout:
     name: "Executar Fan-Out e Abertura de Branches"
@@ -33,6 +47,16 @@ jobs:
         contains(github.event.pull_request.labels.*.name, 'spec-ready')
       ))
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     permissions:
       contents: write
       pull-requests: write
@@ -100,6 +124,9 @@ jobs:
           echo "spec_file=$SPEC_FILE" >> "$GITHUB_OUTPUT"
           echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
           echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Configurar Ambiente CI do Harness
+        run: uv run --project .flywheel_src harness setup --ci
 
       - name: Executar Fan-Out nos Repositórios Spokes
         if: steps.params.outputs.spec_file != ''
