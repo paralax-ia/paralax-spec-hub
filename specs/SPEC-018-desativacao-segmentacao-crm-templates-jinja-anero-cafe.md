@@ -1,26 +1,39 @@
 ---
 spec_id: SPEC-018
-title: "Desativação da Segmentação Artificial no CRM e Padronização de Templates Jinja para Mensagens WhatsApp no Anero Café"
+title: Desativação da Segmentação Artificial no CRM e Padronização de Templates Jinja
+  para Mensagens WhatsApp no Anero Café
 product:
-  - anero-cafe-support
-  - paralax-platform
+- anero-cafe-support
+- paralax-platform
 capability: conversational-ai-agent
 scope: single-repo
-bounded_context: "Conversational Agent / Canais & Formatação WhatsApp"
+bounded_context: Conversational Agent / Canais & Formatação WhatsApp
 origin_module: anero-cafe-support
 target_repositories:
-  - repo: paralax-ia/anero-cafe-support
-    wave: 1
-    role: ai-agent
-    prompts:
-      - anero_cafe/instruction
-      - anero_cafe/b2b_cadastrado
-      - anero_cafe/lead_b2b_qualificacao
-prompts:
+- repo: paralax-ia/anero-cafe-support
+  wave: 1
+  role: ai-agent
+  prompts:
   - anero_cafe/instruction
   - anero_cafe/b2b_cadastrado
   - anero_cafe/lead_b2b_qualificacao
-status: DRAFT
+prompts:
+- name: anero_cafe/instruction
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION
+  description: Instrução governada de prompt 'anero_cafe/instruction'
+- name: anero_cafe/b2b_cadastrado
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION
+  description: Instrução governada de prompt 'anero_cafe/b2b_cadastrado'
+- name: anero_cafe/lead_b2b_qualificacao
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION
+  description: Instrução governada de prompt 'anero_cafe/lead_b2b_qualificacao'
+status: APPROVED
 ---
 
 # SPEC-018: Desativação da Segmentação Artificial no CRM e Padronização de Templates Jinja para Mensagens WhatsApp no Anero Café
