@@ -145,13 +145,6 @@ jobs:
           echo "Verificando autenticação no GitHub CLI:"
           gh auth status || true
 
-          MODE_ARG="--mode remote"
-          if [ "${{ steps.params.outputs.dry_run }}" = "true" ]; then
-            MODE_ARG="--mode local"
-          fi
-
           uv run --project .flywheel_src harness spec plan \
-            "${{ steps.params.outputs.spec_file }}" \
-            --manifest manifest.yaml \
-            --ci \
-            $MODE_ARG
+            --spec "${{ steps.params.outputs.spec_file }}" \
+            --manifest manifest.yaml
