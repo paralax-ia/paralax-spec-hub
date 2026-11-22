@@ -53,6 +53,10 @@ specs:
   title: Integração Universal com Google Drive para Bases de Conhecimento e Catálogos de Agentes de IA
   status: MERGED
   spec_path: specs/SPEC-016-integracao-google-drive-conhecimento-agentes.md
+- id: SPEC-018
+  title: Desativação da Segmentação Artificial no CRM e Padronização de Templates Jinja para Mensagens WhatsApp no Anero Café
+  status: DRAFT
+  spec_path: specs/SPEC-018-desativacao-segmentacao-crm-templates-jinja-anero-cafe.md
 runtime_contracts:
   classes:
   - name: Violation
