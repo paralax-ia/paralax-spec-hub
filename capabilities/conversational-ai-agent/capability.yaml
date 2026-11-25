@@ -18,6 +18,13 @@ ubiquitous_language:
   Heartbeat: Mensagem intermediária de progresso enviada durante execuções prolongadas.
   SessionState: Estado persistente de contexto conversacional e memória do agente.
   TraceContext: Identificador distribuído para correlação e observabilidade no Langfuse.
+  CRM e Runtime Prontos: 'O CRM (`evo-ai-crm-community`) já armazena anexos no ActiveStorage
+    e repassa os metadados no webhook para o `evo-bot-runtime`. O runtime em Go (`evo-bot-runtime`)
+    já baixa o arquivo sob limite seguro de bytes, valida a URL na allowlist de mídia
+    e codifica a imagem em Base64 no envelope JSON-RPC:'
+  Falta de Feature Flag nos Agentes: Os agentes precisam interceptar imagens antes
+    do envio ao LLM caso a flag `ENABLE_IMAGE_SUPPORT` esteja desativada, devolvendo
+    uma resposta amigável sem incorrer em custos de cota e tokens de visão.
 context_map:
   upstream_authoritative: google-antigravity-adk
   sdk_layer: paralax-agents-common
@@ -50,13 +57,24 @@ specs:
   status: MERGED
   spec_path: specs/SPEC-011-sincronizacao-dinamica-prompts-langfuse.md
 - id: SPEC-016
-  title: Integração Universal com Google Drive para Bases de Conhecimento e Catálogos de Agentes de IA
+  title: Integração Universal com Google Drive para Bases de Conhecimento e Catálogos
+    de Agentes de IA
   status: MERGED
   spec_path: specs/SPEC-016-integracao-google-drive-conhecimento-agentes.md
 - id: SPEC-018
-  title: Desativação da Segmentação Artificial no CRM e Padronização de Templates Jinja para Mensagens WhatsApp no Anero Café
-  status: DRAFT
+  title: Desativação da Segmentação Artificial no CRM e Padronização de Templates
+    Jinja para Mensagens WhatsApp no Anero Café
+  status: MERGED
   spec_path: specs/SPEC-018-desativacao-segmentacao-crm-templates-jinja-anero-cafe.md
+- id: SPEC-019
+  title: Suporte a Leitura de Imagens em Agentes de IA via Feature Flag e Modelos
+    Gemini Multimodais (Flash)
+  status: DRAFT
+  spec_path: specs/SPEC-019-suporte-a-leitura-de-imagens-em-agentes-de-ia-via-feature-flag-e-modelos-gemini-multimodais-flash.md
+- spec_id: SPEC-019
+  title: Suporte a Leitura de Imagens em Agentes de IA via Feature Flag e Modelos
+    Gemini Multimodais (Flash)
+  status: APPROVED
 runtime_contracts:
   classes:
   - name: Violation
