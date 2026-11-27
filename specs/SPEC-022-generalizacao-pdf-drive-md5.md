@@ -4,6 +4,7 @@ title: "Generalização de Entrega de Documentos PDF via Google Drive e Storage 
 product:
   - paralax-platform
   - paralax-agents-common
+  - paralax-evo-crm
   - anero-cafe-support
 capability: conversational-ai-agent
 scope: multi-repo
@@ -13,6 +14,9 @@ target_repositories:
   - repo: paralax-ia/paralax-agents-common
     wave: 1
     role: shared-library
+  - repo: paralax-ia/paralax-evo-crm
+    wave: 1
+    role: sdk
   - repo: paralax-ia/anero-cafe-support
     wave: 2
     role: ai-agent
@@ -91,11 +95,11 @@ Diversos agentes da plataforma Paralax (concessionárias de veículos, clínicas
 
 ---
 
-## 3. Especificação do Componente `GoogleDrivePdfManager`
+## 3. Especificação dos Componentes
 
+### 3.1. Componente de Baixo Nível: `GoogleDrivePdfManager` (`paralax-agents-common`)
 Localização no pacote: `paralax.agents.common.drive.GoogleDrivePdfManager`
 
-### 3.1. Interface e Assinatura
 ```python
 class GoogleDrivePdfManager:
     """Universal manager for downloading PDF documents from Google Drive and publishing to public storage."""
@@ -121,6 +125,36 @@ class GoogleDrivePdfManager:
         ...
 ```
 
+### 3.2. Integração no SDK do CRM: `CRMAPIClient` (`paralax-evo-crm`)
+Para que o agente não precise gerenciar diretamente instâncias de storage se preferir delegar para a camada do CRM, o cliente `CRMAPIClient` provê o método de alto nível:
+
+```python
+class CRMAPIClient:
+    ...
+    def resolve_drive_pdf_url(
+        self,
+        file_id: str,
+        filename: str,
+        storage_bucket_name: str | None = None,
+        public_base_url: str | None = None,
+        cache_ttl_seconds: int = 3600,
+    ) -> str:
+        """Sincroniza e resolve a URL pública de entrega de documento PDF via GoogleDrivePdfManager.
+
+        Args:
+            file_id: ID do arquivo PDF no Google Drive.
+            filename: Nome canônico do arquivo com terminação .pdf.
+            storage_bucket_name: Nome do bucket do GCS (default resolvido via env).
+            public_base_url: Base URL pública do CRM (default resolvido via self.crm_url).
+            cache_ttl_seconds: TTL de cache em memória em segundos.
+
+        Returns:
+            URL canônica terminada em .pdf pronta para anexo no WhatsApp.
+        """
+        ...
+```
+Desta forma, os agentes que já consom `from paralax.evo.crm.client import CRMAPIClient` (ou a instância `crm_api`) têm acesso imediato ao recurso de resolução de documentos sem precisar instanciar componentes adicionais de infraestrutura.
+
 ### 3.2. Regras de Negócio e Comportamento
 1. **Content-Type Estrito**: Todo upload no GCS deve registrar explicitamente `content_type="application/pdf"`.
 2. **Controle de Versão Transparente**: Se o `md5Checksum` ou `modifiedTime` do Drive não mudou, o manager não realiza novo download nem re-upload, poupando tráfego de rede e CPU.
@@ -144,13 +178,17 @@ Para validar a integridade sem mocks parciais:
 
 ## 5. Ondas Topológicas de Execução
 
-- [ ] **Onda 1 (`paralax-ia/paralax-agents-common`)**:
+- [ ] **Onda 1A (`paralax-ia/paralax-agents-common`)**:
   - Implementação de `GoogleDrivePdfManager` em `paralax.agents.common.drive`.
   - Suíte de testes unitários com TDD cobrindo cache, TTL, upload, fallback e checagem de MD5.
   - Publicação de release patch no Artifact Registry via CI/CD.
+- [ ] **Onda 1B (`paralax-ia/paralax-evo-crm`)**:
+  - Atualização do `CRMAPIClient` com o método `resolve_drive_pdf_url()`, integrando com `GoogleDrivePdfManager`.
+  - Testes unitários com TDD no SDK do CRM.
+  - Publicação de release patch no Artifact Registry via CI/CD.
 - [ ] **Onda 2 (`paralax-ia/anero-cafe-support`)**:
-  - Atualização da dependência `paralax-agents-common` no `pyproject.toml` e `uv.lock`.
-  - Refatoração do `anero_cafe/services/catalog_pdf.py` para utilizar o `GoogleDrivePdfManager` da biblioteca comum.
+  - Atualização das dependências `paralax-agents-common` e `paralax-evo-crm` no `pyproject.toml` e `uv.lock`.
+  - Refatoração do `send_catalog_pdf()` para consumir a chamada de alta abstração do SDK/manager.
   - Implementação do teste de integração com verificação real de hash MD5 em `tests/integration/test_catalog_pdf_integrity.py`.
 - [ ] **Onda 3 (`paralax-ia/argocd`)**:
   - Homologação das variáveis de ambiente em `prod/anero-cafe-support/patch-env.yaml`.
