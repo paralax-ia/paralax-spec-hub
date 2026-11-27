@@ -223,7 +223,7 @@ No repositório `argocd`, no manifesto `prod/anero-cafe-support/patch-env.yaml`:
 - name: CRM_STORAGE_BUCKET_NAME
   value: "paralax-prod-prod-crm-storage"
 - name: CRM_PUBLIC_URL
-  value: "https://crm.paralax.ia.br"
+  value: "https://crm.paralax.ia.br/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaEpJaWszTm1SbVkySXhNQzFrTmpneUxUUmtaREl0WVdFMk5pMHlZVEpsTXpreE1UQTNZMklHT2daRlZBPT0iLCJleHAiOm51bGwsInB1ciI6ImJsb2JfaWQifX0=--d21890f314e93eec17d971f2bf1c1984cbf776df"
 - name: CATALOG_PDF_FILE_NAME
   value: "catalogo_anero.pdf"
 - name: CATALOG_PDF_CACHE_TTL_SECONDS
@@ -261,7 +261,7 @@ Funcionalidade: Disparo de Catálogo em PDF como Anexo via Bucket do CRM no Aner
   Contexto:
     Dado que a Service Account "prod-agent-anero-cafe-support@paralax-prod.iam.gserviceaccount.com" possui permissão "roles/storage.objectUser" no bucket "paralax-prod-prod-crm-storage"
     E que a Service Account possui permissão de leitura no arquivo "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB" no Google Drive
-    E que a variável "CRM_PUBLIC_URL" está configurada com "https://crm.paralax.ia.br"
+    E que a variável "CRM_PUBLIC_URL" está configurada com a rota pública do ActiveStorage proxy do Rails no CRM ("https://crm.paralax.ia.br/rails/active_storage/blobs/proxy/...")
 
   Cenário: Sincronização do catálogo e salvamento no bucket do CRM
     Dado que o arquivo diagramado no Google Drive possui nova versão ou inicialização do serviço
