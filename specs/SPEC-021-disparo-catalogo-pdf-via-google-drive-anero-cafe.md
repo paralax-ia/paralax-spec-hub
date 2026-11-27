@@ -47,7 +47,7 @@ status: APPROVED
 > **Data de Atualização:** 2026-11-27  
 > **Parent Spec:** [`SPEC-016`](./SPEC-016-integracao-google-drive-conhecimento-agentes.md) (Infraestrutura de leitura do Google Drive)  
 > **Evolution / Generalização:** Evoluída pela [`SPEC-022`](./SPEC-022-generalizacao-pdf-drive-md5.md) (Generalização do componente `GoogleDrivePdfManager` em `paralax-agents-common` com validação criptográfica MD5). O agente `anero-cafe-support` passa a consumir o manager universal do SDK compartilhado em vez de implementar lógica local proprietária.  
-> **Arquitetura de Entrega:** O catálogo oficial diagramado reside no Google Drive sob o ID `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`. O agente utiliza o `GoogleDrivePdfManager` do pacote `paralax-agents-common` para sincronizar o arquivo binário no bucket de storage do CRM (`paralax-prod-prod-crm-storage`), e o CRM serve a URL pública sob a rota do ActiveStorage Proxy (`https://crm.paralax.ia.br/rails/active_storage/blobs/proxy/.../catalogo_anero.pdf`). O arquivo é entregue como **anexo nativo de documento (PDF)** no WhatsApp pela API Oficial da Meta.  
+> **Arquitetura de Entrega:** O catálogo oficial diagramado reside no Google Drive sob o ID `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`. O agente utiliza o `GoogleDrivePdfManager` do pacote `paralax-agents-common` para sincronizar o arquivo binário no bucket de storage do CRM (`paralax-prod-prod-crm-storage`), e o SDK/manager resolve dinamicamente a URL pública assinada V4 para download anônimo sem autenticação. O arquivo é entregue como **anexo nativo de documento (PDF)** no WhatsApp pela API Oficial da Meta.  
 
 ---
 
@@ -69,7 +69,7 @@ A cafeteria possui um **catálogo oficial diagramado em formato PDF**, mantido e
 > **Mecanismo de Publicação e Entrega (Generalizado via SPEC-022):**  
 > 1. O **Google Drive** permanece como a fonte de verdade (SSOT) de edição para o time comercial.  
 > 2. O **Agente (`anero-cafe-support`)** utiliza o **`GoogleDrivePdfManager`** provido pelo pacote compartilhado `paralax-agents-common` (conforme especificado na **SPEC-022**), lendo o binário do Google Drive via Service Account e salvando o arquivo no **bucket de storage do CRM** no Google Cloud Storage (GCS) sob o padrão do ActiveStorage do Rails.  
-> 3. O **CRM (`crm.paralax.ia.br`)** serve a URL pública do arquivo sob o caminho `/rails/active_storage/blobs/proxy/:signed_id/catalogo_anero.pdf` (ou rota dedicada sob `/rails/` ou `/api/`), roteada pelo GKE Gateway diretamente para o pod `evo-crm` com `Content-Type: application/pdf` e terminação `.pdf`.  
+> 3. O **SDK do CRM (`paralax-evo-crm`) / Manager (`GoogleDrivePdfManager`)** gera dinamicamente uma URL pública assinada V4 do Cloud Storage, permitindo download anônimo e direto sem depender de rotas interceptadas por SPA nem exigir autenticação.  
 > 4. O **`evo-bot-runtime`** e o **CRM** identificam o arquivo como anexo nativo (`fileType: "file"`), o serviço `RemoteMediaAttacher` do CRM faz o download do binário PDF real (sem interceptação do Nginx/SPA) e a **API Oficial do WhatsApp (Meta Graph API)** baixa o documento diretamente a partir da URL do CRM, entregando o PDF nativo na conversa sem atrito de redirecionamentos ou necessidade de login no Google.
 
 Esta especificação define:
@@ -128,7 +128,7 @@ Esta especificação define:
 2. **Armazenamento e Servimento Público no CRM:**
    - O agente salva o arquivo binário no bucket de storage do CRM (`paralax-prod-prod-crm-storage`).
    - **Causa Raiz do Bug de Conteúdo HTML (RCA):** No GKE Gateway (`HTTPRoute crm-route`), qualquer requisição para URLs que não casam com os prefixos `/api/`, `/rails/`, `/cable`, `/auth/`, `/core/`, `/processor/` cai na regra default `PathPrefix: /`, que encaminha para o pod do frontend SPA em Nginx (`evo-frontend`). O `evo-frontend` possui a diretriz `try_files $uri $uri/ /index.html;`, respondendo HTTP 200 com o `index.html` (468 bytes, `Content-Type: text/html`) em vez do PDF real.
-   - **Correção Arquitetural do Roteamento:** O CRM (`crm.paralax.ia.br`) expõe a rota pública de download do arquivo sob o prefixo `/rails/active_storage/blobs/proxy/` (ou rota sob `/rails/` / `/api/`), roteada nativamente para o backend Rails (`evo-crm`). O Rails atende via ActiveStorage Proxy servindo o binário PDF genuíno com `Content-Type: application/pdf` e terminação `.pdf` (ex: `https://crm.paralax.ia.br/rails/active_storage/blobs/proxy/:signed_id/catalogo_anero.pdf`).
+   - **Correção Arquitetural do Roteamento (SPEC-022 / Onda 1):** Como requisições à raiz do domínio do CRM caem no fallback de SPA do Nginx, o SDK resolve dinamicamente a URL pública assinada V4 diretamente no Cloud Storage via Service Account, servindo o binário genuíno com `Content-Type: application/pdf` e integridade criptográfica MD5.
 3. **Detecção e Entrega no WhatsApp (API Oficial da Meta):**
    - O `evo-bot-runtime` identifica a URL com extensão `.pdf` via `mediaFileType()` e envia o anexo estruturado (`fileType: "file"`) ao CRM.
    - O CRM ingere o documento no ActiveStorage (baixando o PDF real através do `RemoteMediaAttacher`) e invoca `WhatsappCloudService#send_attachment_via_link`.
@@ -267,7 +267,7 @@ Funcionalidade: Disparo de Catálogo em PDF como Anexo via Bucket do CRM no Aner
     Dado que o arquivo diagramado no Google Drive possui nova versão ou inicialização do serviço
     Quando o serviço de catálogo do agente processar o arquivo
     Então o binário do PDF deve ser salvo no bucket "paralax-prod-prod-crm-storage"
-    E deve estar acessível sob a URL pública servida pelo CRM sob o prefixo "/rails/active_storage/blobs/proxy/.../catalogo_anero.pdf"
+    E deve estar acessível sob URL pública válida para download sem autenticação
     E a URL não deve ser interceptada pelo fallback de SPA do Nginx, retornando HTTP 200 com "Content-Type: application/pdf".
 
   Cenário: Cliente pergunta sobre catálogo geral de produtos
