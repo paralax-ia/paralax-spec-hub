@@ -25,6 +25,11 @@ ubiquitous_language:
   Falta de Feature Flag nos Agentes: Os agentes precisam interceptar imagens antes
     do envio ao LLM caso a flag `ENABLE_IMAGE_SUPPORT` esteja desativada, devolvendo
     uma resposta amigável sem incorrer em custos de cota e tokens de visão.
+  Prompt 1: '`anero_cafe/instruction`'
+  Papel: Instrução especializada para clientes de varejo (Pessoa Física)
+  Idioma: Estritamente em inglês nas diretrizes de sistema, com as frases de resposta
+    literal em português do Brasil (PT-BR).
+  Prompt 2: '`anero_cafe/atendimento_normal`'
 context_map:
   upstream_authoritative: google-antigravity-adk
   sdk_layer: paralax-agents-common
@@ -74,6 +79,10 @@ specs:
 - spec_id: SPEC-019
   title: Suporte a Leitura de Imagens em Agentes de IA via Feature Flag e Modelos
     Gemini Multimodais (Flash)
+  status: APPROVED
+- spec_id: SPEC-021
+  title: Disparo de Catálogo em PDF via Google Drive e Fluxo Conversacional de Cardápio
+    no Anero Café
   status: APPROVED
 runtime_contracts:
   classes:
