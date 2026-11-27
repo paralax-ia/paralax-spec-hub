@@ -379,7 +379,7 @@ async def run_agent(request: CrmRequest):
 
 ## 5. Plano de Rollout e Decomposição em Ondas Topológicas
 
-- [ ] **Onda 1A (`paralax-ia/paralax-agents-common` - Shared Library):**
+- [x] **Onda 1A (`paralax-ia/paralax-agents-common` - Shared Library):** [PR #24](https://github.com/paralax-ia/paralax-agents-common/pull/24)
   - Implementar o módulo `paralax.agents.common.app` com `create_cached_app` e `get_default_context_cache_config`.
   - Adicionar suíte de testes unitários em `tests/paralax/agents/common/test_app.py`.
   - Publicar release patch via CI/CD no Artifact Registry.
