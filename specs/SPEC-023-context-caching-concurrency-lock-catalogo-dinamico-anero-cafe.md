@@ -1,6 +1,6 @@
 ---
 spec_id: SPEC-023
-title: "Context Caching no ADK, Injeção Dinâmica da Lista de Preços no System Prompt e Lock de Concorrência via Decorator no SDK"
+title: "Context Caching no ADK via paralax.agents.common.app, Injeção Dinâmica da Lista de Preços e Lock de Concorrência no SDK"
 product:
   - anero-cafe-support
   - paralax-platform
@@ -9,6 +9,9 @@ scope: multi-repo
 bounded_context: "Conversational Agent / Performance, Cache & Concorrência"
 origin_module: paralax-spec-hub
 target_repositories:
+  - repo: paralax-ia/paralax-agents-common
+    wave: 1
+    role: shared-library
   - repo: paralax-ia/paralax-evo-crm
     wave: 1
     role: sdk
@@ -35,15 +38,16 @@ prompts:
 status: APPROVED
 ---
 
-# SPEC-023: Context Caching no ADK, Injeção Dinâmica da Lista de Preços no System Prompt e Lock de Concorrência via Decorator no SDK
+# SPEC-023: Context Caching no ADK via paralax.agents.common.app, Injeção Dinâmica da Lista de Preços e Lock de Concorrência no SDK
 
 > **Product:** [`anero-cafe-support`](../products/anero-cafe-support.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)  
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
-> **Scope:** SDK Compartilhado (`paralax-evo-crm`), Agente de IA (`anero-cafe-support`) e GitOps (`argocd`)  
+> **Scope:** Shared Library (`paralax-agents-common`), SDK CRM (`paralax-evo-crm`), Agente de IA (`anero-cafe-support`) e GitOps (`argocd`)  
 > **Bounded Context:** Conversational Agent / Performance, Cache & Concorrência  
 > **Status:** APPROVED  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-11-27  
+> **Data de Revisão:** 2026-11-27  
 > **Distinção Fundamental de Arquivos do Anero Café:**  
 > - **Arquivo 1 - Catálogo PDF (`GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`):** Definido e governado pelas SPECs 021 e 022. É o catálogo visual diagramado em PDF enviado como documento anexo no WhatsApp via ferramenta `send_catalog_pdf` (usando o `GoogleDrivePdfManager`). **Permanece inalterado nesta spec.**  
 > - **Arquivo 2 - Lista de Preços e Cafés (`GOOGLE_DRIVE_PF_FILE_ID`):** Arquivo de dados/texto no Google Drive contendo a relação de cafés, características sensoriais, moagens e tabela de preços de varejo. **É o foco da Solução A desta spec.**
@@ -56,8 +60,8 @@ Durante a investigação de causa raiz (RCA) do incidente com o contato `+55 61 
 
 Esta especificação possui **três objetivos estritos e bem definidos**:
 
-1. **Habilitar o Context Caching no Google ADK / Vertex AI:**
-   Configurar `context_cache_config` na entidade `App` do ADK para criar e manter em cache no Vertex AI o prefixo fixo da aplicação (system instruction longo + schemas de ferramentas), reduzindo drasticamente o TTFT (*Time to First Token*) e o custo de inferência.
+1. **Generalizar e Habilitar o Context Caching no `paralax-agents-common` (Namespace `app`):**
+   Criar o módulo `paralax.agents.common.app` na biblioteca compartilhada para prover a fábrica `create_cached_app` e a configuração padronizada de `ContextCacheConfig` com governança 12-Factor, permitindo que o `anero-cafe-support` (e qualquer outro agente da plataforma) instancie seu `App` com Context Caching ativo no Vertex AI em uma única linha declarativa.
 2. **Evitar a Chamada de Tool para a Lista de Preços (Solução A):**
    Baixar o arquivo da **lista de preços** (`GOOGLE_DRIVE_PF_FILE_ID`) via callback no início do agente (`before_agent`), utilizando **validação de alteração do arquivo** (`modifiedTime` / `md5Checksum`) no Google Drive para só baixar se houver alteração real, e injetar o texto da lista de preços diretamente no **system prompt**. Com isso, o modelo responde sobre cafés e preços em **1 único turno de LLM**, eliminando a tool call redundante de `get_catalog_overview` (que demorava 136s por turno).
 3. **Criar o Lock por Conversa no Backend via Decorator Reutilizável no SDK (Solução C):**
@@ -91,8 +95,9 @@ Esta especificação possui **três objetivos estritos e bem definidos**:
                                     │
                                     ▼
  ┌────────────────────────────────────────────────────────────────────────┐
- │               Google ADK App + Vertex AI Context Caching               │
- │   • App(context_cache_config=ContextCacheConfig(ttl=1800, min=2048))   │
+ │      SHARED LIB paralax-agents-common (Namespace app / Objetivo 1)     │
+ │   • paralax.agents.common.app.create_cached_app(name, root_agent)      │
+ │   • Configura ContextCacheConfig(ttl=1800, min=2048) via 12-Factor     │
  │   • Vertex AI cria CachedContent para o prefixo fixo estável           │
  │   • Redução de TTFT (-70%) e desconto de 75% no custo de tokens        │
  └────────────────────────────────────────────────────────────────────────┘
@@ -111,37 +116,101 @@ Esta especificação possui **três objetivos estritos e bem definidos**:
 
 ## 3. Especificação Técnica dos Três Pilares
 
-### 3.1. Pilar 1: Habilitação do Context Caching no Google ADK
-Localização: `anero_cafe/agent.py` e `anero_cafe/__init__.py`
+### 3.1. Pilar 1: Generalização de Context Caching em `paralax.agents.common.app`
+Localização: `paralax/agents/common/app.py` (no repositório `paralax-agents-common`)
 
-1. No arquivo `anero_cafe/agent.py`, define-se a instância de `ContextCacheConfig` e envelopa-se o agente na entidade de alto nível `App`:
+Para padronizar e governar o ciclo de vida de aplicações Google ADK em todo o ecossistema Paralax IA, a fábrica de `App` com Context Caching é centralizada no namespace `app`:
+
+1. **Definição de `paralax.agents.common.app`:**
 ```python
-from google.adk.apps.app import App
+"""App factory and Context Caching governance for Google ADK agents."""
+
+from __future__ import annotations
+
+import logging
+import os
+from typing import Any
+
 from google.adk.agents.context_cache_config import ContextCacheConfig
+from google.adk.apps.app import App
 from google.genai.types import HttpOptions
 
-context_cache_config = ContextCacheConfig(
-    ttl_seconds=1800,        # 30 minutos de vida útil no Vertex AI
-    cache_intervals=10,      # Reuso de até 10 turnos antes de invalidar
-    min_tokens=2048,         # Piso mínimo de tokens para Gemini 2.5 / 3.x
-    create_http_options=HttpOptions(timeout=10000),
-)
+logger = logging.getLogger(__name__)
 
-app = App(
-    name="anero_cafe",
-    root_agent=root_agent,
-    context_cache_config=context_cache_config,
-)
+
+def get_default_context_cache_config(
+    ttl_seconds: int | None = None,
+    min_tokens: int | None = None,
+    cache_intervals: int | None = None,
+    timeout_ms: int = 10000,
+) -> ContextCacheConfig | None:
+    """Retorna a configuração padrão de Context Caching governada por variáveis de ambiente.
+
+    Args:
+        ttl_seconds: TTL opcional em segundos.
+        min_tokens: Piso mínimo de tokens para ativar o cache.
+        cache_intervals: Quantidade de turnos antes de revalidar o cache.
+        timeout_ms: Timeout em milissegundos para a criação do cache no Vertex AI.
+
+    Returns:
+        Instância de ContextCacheConfig ou None se desabilitado via ENABLE_CONTEXT_CACHE=false.
+    """
+    enabled_raw = os.environ.get("ENABLE_CONTEXT_CACHE", "true").strip().lower()
+    if enabled_raw not in ("true", "1", "yes", "t"):
+        logger.info("Context Caching desabilitado via ENABLE_CONTEXT_CACHE=false.")
+        return None
+
+    resolved_ttl = ttl_seconds or int(os.environ.get("CONTEXT_CACHE_TTL_SECONDS", "1800"))
+    resolved_min_tokens = min_tokens or int(os.environ.get("CONTEXT_CACHE_MIN_TOKENS", "2048"))
+    resolved_intervals = cache_intervals or int(os.environ.get("CONTEXT_CACHE_INTERVALS", "10"))
+
+    return ContextCacheConfig(
+        ttl_seconds=resolved_ttl,
+        min_tokens=resolved_min_tokens,
+        cache_intervals=resolved_intervals,
+        create_http_options=HttpOptions(timeout=timeout_ms),
+    )
+
+
+def create_cached_app(
+    name: str,
+    root_agent: Any,
+    plugins: list[Any] | None = None,
+    **cache_kwargs: Any,
+) -> App:
+    """Fábrica para instanciar App do Google ADK com governança centralizada de Context Caching.
+
+    Args:
+        name: Nome canônico da aplicação.
+        root_agent: Agente raiz (BaseAgent) da aplicação.
+        plugins: Lista de plugins compartilhados do ADK.
+        **cache_kwargs: Parâmetros opcionais para sobrescrever defaults de cache.
+
+    Returns:
+        Instância de App configurada e pronta para execução no Runner.
+    """
+    cache_config = get_default_context_cache_config(**cache_kwargs)
+    return App(
+        name=name,
+        root_agent=root_agent,
+        plugins=plugins or [],
+        context_cache_config=cache_config,
+    )
 ```
 
-2. No `anero_cafe/__init__.py`, expõe-se `app` e `root_agent`:
+2. **Consumo no Agente `anero-cafe-support` (`anero_cafe/agent.py` e `anero_cafe/__init__.py`):**
+```python
+from paralax.agents.common.app import create_cached_app
+
+# Instanciação centralizada com 1 linha
+app = create_cached_app(name="anero_cafe", root_agent=root_agent)
+```
+E no `anero_cafe/__init__.py`:
 ```python
 from .agent import app, root_agent
 
 __all__ = ["app", "root_agent"]
 ```
-
-3. O `AgentLoader` do ADK reconhece a variável `app` do tipo `App`, injeta `context_cache_config` no `Runner` e ativa o `GeminiContextCacheManager`. Como o prompt estático da Anero possui mais de 4.700 tokens (acima do piso mínimo), o Vertex AI instancia o `CachedContent` automaticamente.
 
 ---
 
@@ -268,37 +337,37 @@ async def run_agent(request: CrmRequest):
 
 ## 4. Critérios de Aceitação (Gherkin)
 
-### Cenário 1: Reutilização da lista de preços em cache sem novo download no Google Drive
+### Cenário 1: Fábrica `paralax.agents.common.app.create_cached_app` cria App com ContextCacheConfig
+- **Dado** que um agente invoca `create_cached_app(name="meu_agente", root_agent=root_agent)`
+- **Quando** a variável `ENABLE_CONTEXT_CACHE` for "true" (ou não definida)
+- **Então** o objeto `App` retornado deve possuir `context_cache_config` preenchido
+- **E** `context_cache_config.ttl_seconds` deve respeitar `CONTEXT_CACHE_TTL_SECONDS` (default: 1800).
+
+### Cenário 2: Reutilização da lista de preços em cache sem novo download no Google Drive
 - **Dado** que o agente Anero Café recebeu uma mensagem de atendimento
 - **E** o arquivo da lista de preços (`GOOGLE_DRIVE_PF_FILE_ID`) possui `modifiedTime` idêntico ao do cache local
 - **Quando** o callback `before_agent` for acionado
 - **Então** nenhum download do arquivo no Google Drive deve ser realizado
 - **E** a lista de preços mantida em memória deve ser injetada no prompt em menos de 50ms.
 
-### Cenário 2: Download condicional somente quando a lista de preços for alterada no Drive
+### Cenário 3: Download condicional somente quando a lista de preços for alterada no Drive
 - **Dado** que a cafeteria alterou valores ou cafés no arquivo da lista de preços no Google Drive
 - **Quando** uma nova mensagem de atendimento for recebida
 - **Então** o `PriceListSyncService` deve detectar a alteração de `modifiedTime` / hash
 - **E** baixar o novo conteúdo, atualizar o cache local e injetar os novos preços no prompt.
 
-### Cenário 3: Resposta de cafés e preços em 1 único turno de LLM sem chamar tool
+### Cenário 4: Resposta de cafés e preços em 1 único turno de LLM sem chamar tool
 - **Dado** que o cliente pergunta *"Quais cafés especiais vocês têm e quais os valores?"*
 - **Quando** o agente processar a mensagem
 - **Então** o modelo deve gerar a resposta completa em um único turno de inferência (`events = [model_turn]`)
 - **E** nenhuma chamada para a tool `get_catalog_overview` deve ser executada
 - **E** a latência de resposta deve ser inferior a 20 segundos.
 
-### Cenário 4: Preservação da tool de envio de catálogo em PDF (SPEC-021/SPEC-022)
+### Cenário 5: Preservação da tool de envio de catálogo em PDF (SPEC-021/SPEC-022)
 - **Dado** que o cliente pede expressamente *"Me manda o catálogo em PDF"*
 - **Quando** o agente processar a mensagem
 - **Então** a tool `send_catalog_pdf` deve ser invocada
 - **E** a URL do catálogo PDF oficial (arquivo 1) deve ser retornada para entrega do anexo nativo.
-
-### Cenário 5: Habilitação de Context Caching no Google ADK
-- **Dado** que o serviço `anero-cafe-support` é inicializado
-- **Quando** o container subir no GKE
-- **Então** a instância de `App` deve conter `context_cache_config` configurada com `ttl_seconds=1800` e `min_tokens=2048`
-- **E** o log não deve apresentar warning de `can transfer between agents but has no context_cache_config`.
 
 ### Cenário 6: Bloqueio de concorrência por conversa no backend via decorator (Solução C)
 - **Dado** que uma requisição para a conversa `conv-123` está em processamento no pod
@@ -310,17 +379,22 @@ async def run_agent(request: CrmRequest):
 
 ## 5. Plano de Rollout e Decomposição em Ondas Topológicas
 
-- [ ] **Onda 1 (`paralax-ia/paralax-evo-crm` - SDK):**
+- [ ] **Onda 1A (`paralax-ia/paralax-agents-common` - Shared Library):**
+  - Implementar o módulo `paralax.agents.common.app` com `create_cached_app` e `get_default_context_cache_config`.
+  - Adicionar suíte de testes unitários em `tests/paralax/agents/common/test_app.py`.
+  - Publicar release patch via CI/CD no Artifact Registry.
+
+- [ ] **Onda 1B (`paralax-ia/paralax-evo-crm` - SDK):**
   - Implementar o decorator `@conversation_lock` em `paralax/evo/crm/lock.py`.
-  - Suíte completa de testes unitários com TDD em `tests/paralax/evo/crm/test_lock.py` (cobrindo lock adquirido, lock colidido, liberação no finally e fallback em falhas de Redis).
+  - Suíte de testes unitários com TDD em `tests/paralax/evo/crm/test_lock.py` (cobrindo lock adquirido, lock colidido, liberação no finally e fallback em falhas de Redis).
   - Publicar release patch via CI/CD no Artifact Registry.
 
 - [ ] **Onda 2 (`paralax-ia/anero-cafe-support` - Agente de IA):**
-  - Atualizar dependência `paralax-evo-crm` via `uv sync`.
+  - Atualizar dependências (`paralax-agents-common` e `paralax-evo-crm`) via `uv sync`.
+  - Instanciar `App` utilizando `from paralax.agents.common.app import create_cached_app` e exportar em `anero_cafe/__init__.py`.
   - Decorar o router `/crm/run` com `@conversation_lock`.
   - Implementar `PriceListSyncService` em `anero_cafe/services/price_list_sync.py` com testes unitários em `tests/unit/test_price_list_sync.py`.
   - Integrar `before_agent` em `anero_cafe/shared_libraries/callbacks.py` para injetar a lista de preços no system prompt.
-  - Instanciar `App` com `ContextCacheConfig` em `anero_cafe/agent.py` e exportar em `anero_cafe/__init__.py`.
   - Sincronizar prompts atualizados no Langfuse (`anero_cafe/instruction` e `anero_cafe/atendimento_normal`).
   - Executar suíte completa de verificação (`just verify`).
   - Abrir PR no repositório `anero-cafe-support`.
