@@ -1,35 +1,38 @@
 ---
 spec_id: SPEC-021
-title: "Disparo de Catálogo em PDF via Google Drive e Fluxo Conversacional de Cardápio no Anero Café"
+title: Disparo de Catálogo em PDF via Google Drive e Fluxo Conversacional de Cardápio
+  no Anero Café
 product:
-  - anero-cafe-support
-  - paralax-platform
+- anero-cafe-support
+- paralax-platform
 capability: conversational-ai-agent
 scope: single-repo
-bounded_context: "Conversational Agent / Canais & Envio de Documentos"
+bounded_context: Conversational Agent / Canais & Envio de Documentos
 origin_module: anero-cafe-support
 target_repositories:
-  - repo: paralax-ia/anero-cafe-support
-    wave: 1
-    role: ai-agent
-    prompts:
-      - anero_cafe/instruction
-      - anero_cafe/atendimento_normal
-  - repo: paralax-ia/argocd
-    wave: 2
-    role: gitops
+- repo: paralax-ia/anero-cafe-support
+  wave: 1
+  role: ai-agent
+  prompts:
+  - anero_cafe/instruction
+  - anero_cafe/atendimento_normal
+- repo: paralax-ia/argocd
+  wave: 2
+  role: gitops
 prompts:
-  - name: anero_cafe/instruction
-    target_repo: paralax-ia/anero-cafe-support
-    file: anero_cafe/prompts.py
-    symbol: INSTRUCTION
-    description: "System instructions for Anero Cafe agent with PDF catalog dispatch and fixed conversational flow"
-  - name: anero_cafe/atendimento_normal
-    target_repo: paralax-ia/anero-cafe-support
-    file: anero_cafe/prompts.py
-    symbol: INSTRUCTION_ATENDIMENTO_NORMAL
-    description: "Retail conversational prompt for Anero Cafe normal attendance with deterministic PDF dispatch"
-status: APPROVED
+- name: anero_cafe/instruction
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION
+  description: System instructions for Anero Cafe agent with PDF catalog dispatch
+    and fixed conversational flow
+- name: anero_cafe/atendimento_normal
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION_ATENDIMENTO_NORMAL
+  description: Retail conversational prompt for Anero Cafe normal attendance with
+    deterministic PDF dispatch
+status: MERGED
 ---
 
 # SPEC-021: Disparo de Catálogo em PDF via Google Drive e Fluxo Conversacional de Cardápio no Anero Café
@@ -71,7 +74,7 @@ Esta especificação define:
 ## 2. Escopo e Repositórios Afetados (Ondas Topológicas)
 
 - [x] **Sub-tarefa 1 (`paralax-ia/anero-cafe-support`):** [Onda 1] Implementação da tool `send_catalog_pdf` (construindo o link do Drive a partir de `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`), atualização dos prompts governados no Langfuse e suíte de testes unitários com TDD. [PR #48](https://github.com/paralax-ia/anero-cafe-support/pull/48)
-- [ ] **Sub-tarefa 2 (`paralax-ia/argocd`):** [Onda 2] Declaração declarativa 12-Factor da variável `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID: "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"` no overlay `prod/anero-cafe-support` (`patch-env.yaml`).
+- [x] **Sub-tarefa 2 (`paralax-ia/argocd`):** [Onda 2] Declaração declarativa 12-Factor da variável `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID: "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"` no overlay `prod/anero-cafe-support` (`patch-env.yaml`). [PR #33](https://github.com/paralax-ia/argocd/pull/33)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐

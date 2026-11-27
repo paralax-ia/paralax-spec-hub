@@ -113,10 +113,26 @@ runtime_contracts:
     - key
   - name: Comparison
     methods: []
+  - name: DriveFileMetadata
+    methods: []
+  - name: GoogleDriveContentManager
+    methods:
+    - get_content
   - name: PrivacyMaskingSpanProcessor
     methods:
     - on_start
     - on_end
+  - name: PromptSecurityValidator
+    methods: []
+  - name: PromptManagementEndpoints
+    methods:
+    - refresh_prompt
+    - prompt_status
+  - name: DynamicPromptManager
+    methods:
+    - get_instruction
+    - refresh
+    - get_status
   - name: CodeBlockReplacer
     methods:
     - save_code
