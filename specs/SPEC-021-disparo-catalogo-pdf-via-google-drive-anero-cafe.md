@@ -201,12 +201,12 @@ No repositório `terraform`, no arquivo `main.tf`:
 resource "google_storage_bucket_iam_member" "anero_cafe_catalog_pdf_crm_storage_access" {
   bucket = google_storage_bucket.crm_storage.name
   role   = "roles/storage.objectUser"
-  member = "serviceAccount:${module.iam.agent_sa_emails["anero-cafe-support"]}"
+  member = "serviceAccount:${module.iam.agent_sa_emails["anero-cafe-anero-cafe-support"]}"
 }
 ```
 
 - **Bucket Alvo:** `google_storage_bucket.crm_storage` (`paralax-prod-prod-crm-storage`)
-- **Service Account Beneficiária:** `module.iam.agent_sa_emails["anero-cafe-support"]` (`prod-agent-anero-cafe-support@paralax-prod.iam.gserviceaccount.com`)
+- **Service Account Beneficiária:** `module.iam.agent_sa_emails["anero-cafe-anero-cafe-support"]` (`prod-agent-anero-cafe-support@paralax-prod.iam.gserviceaccount.com`)
 - **Papel:** `roles/storage.objectUser` (leitura, escrita e atualização de objetos no bucket)
 - **Criptografia CMEK:** A chave KMS do CRM (`google_kms_crypto_key.crm_key`) já possui concessão automática para o Service Agent do GCS (`roles/cloudkms.cryptoKeyEncrypterDecrypter`), permitindo a criptografia transparente dos objetos salvos pelo agente.
 
