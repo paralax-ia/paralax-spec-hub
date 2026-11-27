@@ -134,7 +134,33 @@ Esta especificação define:
 
 ---
 
-### 3.2. Regras de Negócio Conversacionais e Fluxo de Atendimento
+### 3.2. Estratégia de Cache, Invalidação e Resiliência (Cache-Aside em Duas Camadas)
+
+Para otimizar a performance, eliminar latência no atendimento ao cliente (evitando baixar repetidamente arquivos pesados em cada turno de conversa) e prevenir o esgotamento de cotas da Google Drive API:
+
+1. **Camada 1: Cache em Memória no Agente (Metadados e URL Pública)**
+   - O agente mantém em memória os metadados do catálogo: `last_checked_at` (timestamp Unix da última checagem), `last_modified_time` (string ISO de modificação remota no Drive) e a URL pública servida pelo CRM.
+   - **TTL Configurável (`CATALOG_PDF_CACHE_TTL_SECONDS`):** Definido via variável de ambiente (padrão: `3600` segundos / 1 hora). Durante essa janela de tempo, qualquer chamada à ferramenta `send_catalog_pdf` responde instantaneamente com a URL em cache sem consultar a API do Drive nem acessar o bucket.
+
+2. **Camada 2: Invalidação por Polling Leve (`files.get`)**
+   - Ao expirar o TTL (ou na inicialização do pod), o agente não faz download do arquivo inteiro; realiza apenas uma chamada leve de metadados:
+     `drive_service.files().get(fileId=..., fields="modifiedTime,md5Checksum").execute()`
+   - Se o `modifiedTime` do Drive coincidir com o `last_modified_time` do cache e o objeto já existir no bucket:
+     - O agente apenas atualiza `last_checked_at = now()` e mantém a URL sem gastar banda de rede.
+   - Se o `modifiedTime` for diferente (indica que a cafeteria atualizou o catálogo) ou se for o primeiro provisionamento:
+     - O agente realiza o download binário via `files.get_media()`.
+     - Executa o upload atômico para o bucket do CRM (`paralax-prod-prod-crm-storage`) com `content_type="application/pdf"`.
+     - Atualiza `last_modified_time = remote_modified`, `last_checked_at = now()` e o registro da URL pública.
+
+3. **Resiliência e Fallback para Contingência:**
+   - Se a Google Drive API apresentar indisponibilidade temporária (falha de rede, timeout, HTTP 429 ou 5xx):
+     - O agente captura a falha e registra aviso em log (`logger.warning`).
+     - Continua servindo a URL do arquivo já persistido no bucket do CRM (último cache válido).
+     - O atendimento ao cliente nunca é interrompido por instabilidades externas do Google Drive.
+
+---
+
+### 3.3. Regras de Negócio Conversacionais e Fluxo de Atendimento
 
 #### Gatilhos de Ativação do Catálogo em PDF:
 Quando a mensagem do cliente contiver intenção explícita ou implícita sobre:
@@ -165,7 +191,7 @@ O agente deve estruturar a resposta contendo:
 
 ---
 
-### 3.3. Configuração de Infraestrutura no Terraform (`paralax-ia/terraform`)
+### 3.4. Configuração de Infraestrutura no Terraform (`paralax-ia/terraform`)
 
 No repositório `terraform`, no arquivo `main.tf`:
 
@@ -186,7 +212,7 @@ resource "google_storage_bucket_iam_member" "anero_cafe_catalog_pdf_crm_storage_
 
 ---
 
-### 3.4. Configuração GitOps no ArgoCD (`paralax-ia/argocd`)
+### 3.5. Configuração GitOps no ArgoCD (`paralax-ia/argocd`)
 
 No repositório `argocd`, no manifesto `prod/anero-cafe-support/patch-env.yaml`:
 ```yaml
@@ -198,6 +224,8 @@ No repositório `argocd`, no manifesto `prod/anero-cafe-support/patch-env.yaml`:
   value: "https://crm.paralax.ia.br"
 - name: CATALOG_PDF_FILE_NAME
   value: "catalogo_anero.pdf"
+- name: CATALOG_PDF_CACHE_TTL_SECONDS
+  value: "3600"
 ```
 
 **Conta de Serviço GCP (Workload Identity) que necessita de acesso Leitor (Viewer) no Google Drive:**
@@ -206,7 +234,7 @@ No repositório `argocd`, no manifesto `prod/anero-cafe-support/patch-env.yaml`:
 
 ---
 
-### 3.5. Governança de Prompts (SPEC-PROMPT-01 & Langfuse SSOT)
+### 3.6. Governança de Prompts (SPEC-PROMPT-01 & Langfuse SSOT)
 
 - **Prompt 1:** `anero_cafe/instruction`
   - **Repositório:** `paralax-ia/anero-cafe-support`
@@ -262,6 +290,39 @@ Funcionalidade: Disparo de Catálogo em PDF como Anexo via Bucket do CRM no Aner
     Então o agente não deve re-disparar o catálogo em PDF
     E deve invocar a ferramenta "get_coffee_details" ou "coffee_search"
     E responder objetivamente às dúvidas do cliente sobre o produto.
+
+  Cenário: Reutilização de cache dentro da janela de TTL
+    Dado que o catálogo já foi sincronizado e armazenado no bucket do CRM
+    E que a última checagem ocorreu há menos tempo que "CATALOG_PDF_CACHE_TTL_SECONDS"
+    Quando o cliente solicitar o catálogo ou a lista de preços
+    Então o agente deve invocar a tool "send_catalog_pdf"
+    E a tool deve retornar imediatamente a URL pública em cache
+    E nenhuma chamada de download ou verificação de metadados deve ser feita ao Google Drive ou GCS.
+
+  Cenário: Verificação de metadados após expiração de TTL sem alteração no Drive
+    Dado que a janela de TTL do cache expirou
+    E que o arquivo no Google Drive não teve seu "modifiedTime" alterado
+    Quando o agente consultar o catálogo
+    Então o agente deve executar apenas a chamada de metadados "files.get"
+    E não deve realizar download do binário nem upload para o bucket do CRM
+    E deve renovar o timestamp de checagem mantendo a URL servida pelo CRM.
+
+  Cenário: Atualização dinâmica do catálogo no Google Drive
+    Dado que o catálogo diagramado foi atualizado no Google Drive com novo "modifiedTime"
+    E que a janela de TTL do cache expirou
+    Quando o agente for consultado
+    Então o agente deve detectar o novo "modifiedTime" via "files.get"
+    E baixar o novo binário do Google Drive
+    E sobrescrever o arquivo no bucket "paralax-prod-prod-crm-storage"
+    E atualizar os metadados de cache.
+
+  Cenário: Resiliência em caso de falha de conexão com a API do Google Drive
+    Dado que o catálogo já se encontra salvo no bucket do CRM
+    E que a Google Drive API apresenta indisponibilidade transitória
+    Quando o agente invocar a tool "send_catalog_pdf"
+    Então o agente deve registrar um aviso no log
+    E retornar normalmente a URL pública do bucket do CRM
+    E o atendimento ao cliente não deve ser interrompido.
 ```
 
 ---
