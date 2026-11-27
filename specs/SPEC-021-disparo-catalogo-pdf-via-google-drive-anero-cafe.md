@@ -46,7 +46,8 @@ status: APPROVED
 > **Data de Criação:** 2026-11-26  
 > **Data de Atualização:** 2026-11-27  
 > **Parent Spec:** [`SPEC-016`](./SPEC-016-integracao-google-drive-conhecimento-agentes.md) (Infraestrutura de leitura do Google Drive)  
-> **Arquitetura de Entrega:** O catálogo oficial diagramado reside no Google Drive sob o ID `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`. O agente salva o arquivo binário no bucket de storage do CRM (`paralax-prod-prod-crm-storage`), e o CRM serve a URL pública sob a rota do ActiveStorage Proxy (`https://crm.paralax.ia.br/rails/active_storage/blobs/proxy/.../catalogo_anero.pdf`). O arquivo é entregue como **anexo nativo de documento (PDF)** no WhatsApp pela API Oficial da Meta.  
+> **Evolution / Generalização:** Evoluída pela [`SPEC-022`](./SPEC-022-generalizacao-pdf-drive-md5.md) (Generalização do componente `GoogleDrivePdfManager` em `paralax-agents-common` com validação criptográfica MD5). O agente `anero-cafe-support` passa a consumir o manager universal do SDK compartilhado em vez de implementar lógica local proprietária.  
+> **Arquitetura de Entrega:** O catálogo oficial diagramado reside no Google Drive sob o ID `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`. O agente utiliza o `GoogleDrivePdfManager` do pacote `paralax-agents-common` para sincronizar o arquivo binário no bucket de storage do CRM (`paralax-prod-prod-crm-storage`), e o CRM serve a URL pública sob a rota do ActiveStorage Proxy (`https://crm.paralax.ia.br/rails/active_storage/blobs/proxy/.../catalogo_anero.pdf`). O arquivo é entregue como **anexo nativo de documento (PDF)** no WhatsApp pela API Oficial da Meta.  
 
 ---
 
@@ -65,9 +66,9 @@ A cafeteria possui um **catálogo oficial diagramado em formato PDF**, mantido e
 > **Diretriz de Negócio e Entrega como Anexo Nativo:**  
 > **Não é para enviar o link do Google Drive para o cliente**, e sim **enviar o arquivo PDF como anexo nativo de documento** diretamente na conversa do WhatsApp.  
 > 
-> **Mecanismo de Publicação e Entrega:**  
+> **Mecanismo de Publicação e Entrega (Generalizado via SPEC-022):**  
 > 1. O **Google Drive** permanece como a fonte de verdade (SSOT) de edição para o time comercial.  
-> 2. O **Agente (`anero-cafe-support`)** lê o binário do Google Drive via Service Account e salva o arquivo no **bucket de storage do CRM** no Google Cloud Storage (GCS) sob o padrão do ActiveStorage do Rails.  
+> 2. O **Agente (`anero-cafe-support`)** utiliza o **`GoogleDrivePdfManager`** provido pelo pacote compartilhado `paralax-agents-common` (conforme especificado na **SPEC-022**), lendo o binário do Google Drive via Service Account e salvando o arquivo no **bucket de storage do CRM** no Google Cloud Storage (GCS) sob o padrão do ActiveStorage do Rails.  
 > 3. O **CRM (`crm.paralax.ia.br`)** serve a URL pública do arquivo sob o caminho `/rails/active_storage/blobs/proxy/:signed_id/catalogo_anero.pdf` (ou rota dedicada sob `/rails/` ou `/api/`), roteada pelo GKE Gateway diretamente para o pod `evo-crm` com `Content-Type: application/pdf` e terminação `.pdf`.  
 > 4. O **`evo-bot-runtime`** e o **CRM** identificam o arquivo como anexo nativo (`fileType: "file"`), o serviço `RemoteMediaAttacher` do CRM faz o download do binário PDF real (sem interceptação do Nginx/SPA) e a **API Oficial do WhatsApp (Meta Graph API)** baixa o documento diretamente a partir da URL do CRM, entregando o PDF nativo na conversa sem atrito de redirecionamentos ou necessidade de login no Google.
 
