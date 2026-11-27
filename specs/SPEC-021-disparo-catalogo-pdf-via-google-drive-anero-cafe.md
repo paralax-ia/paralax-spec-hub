@@ -70,8 +70,11 @@ Esta especificação define:
 
 ## 2. Escopo e Repositórios Afetados (Ondas Topológicas)
 
-- [ ] **Sub-tarefa 1 (`paralax-ia/anero-cafe-support`):** [Onda 1] Implementação da tool `send_catalog_pdf`, rota HTTP estática de download/cache do PDF do Google Drive (`GET /assets/catalogo_anero.pdf`), atualização dos prompts governados no Langfuse e suíte de testes unitários com TDD.
-- [ ] **Sub-tarefa 2 (`paralax-ia/argocd`):** [Onda 2] Declaração declarativa 12-Factor das variáveis `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID` e `CATALOG_PDF_PUBLIC_URL` no overlay `prod/anero-cafe-support`.
+- [x] **Sub-tarefa 1 (`paralax-ia/anero-cafe-support`):** [Onda 1] Implementação da tool `send_catalog_pdf`, rota HTTP estática de download/cache do PDF do Google Drive (`GET /assets/catalogo_anero.pdf`), atualização dos prompts governados no Langfuse e suíte de testes unitários com TDD. [PR #48](https://github.com/paralax-ia/anero-cafe-support/pull/48)
+- [ ] **Sub-tarefa 2 (`paralax-ia/argocd`):** [Onda 2] Declaração declarativa 12-Factor das variáveis de catálogo no overlay `prod/anero-cafe-support` (`patch-env.yaml`):
+  - `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID: "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"` ([Arquivo no Google Drive](https://drive.google.com/file/d/1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB/view?usp=drive_link))
+  - `CATALOG_PDF_PUBLIC_URL: "https://anero-cafe.paralax.ia/assets/catalogo_anero.pdf"`
+  - Permissão de Leitor necessária para: `prod-agent-anero-cafe-support@paralax-prod.iam.gserviceaccount.com`
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -145,6 +148,26 @@ O agente deve estruturar a resposta contendo:
 - Em conformidade com a **SPEC-012** e **SPEC-016**, caso o cliente seja identificado como Pessoa Jurídica (empresa, cafeteria, restaurante, compra no atacado acima de 5kg):
   - É proibido cotar preços corporativos via bot.
   - O agente aciona a transferência corporativa via `transfer_to_b2b_agent` / `notify_owner_corporate_order`.
+
+---
+
+### 3.3. Configuração GitOps no ArgoCD (`paralax-ia/argocd`)
+
+No repositório `argocd`, no manifesto `prod/anero-cafe-support/patch-env.yaml`:
+```yaml
+- name: GOOGLE_DRIVE_CATALOG_PDF_FILE_ID
+  value: "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"
+- name: CATALOG_PDF_PUBLIC_URL
+  value: "https://anero-cafe.paralax.ia/assets/catalogo_anero.pdf"
+```
+
+**Arquivo Alvo no Google Drive:**
+- **Link Oficial:** `https://drive.google.com/file/d/1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB/view?usp=drive_link`
+- **File ID:** `1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB`
+
+**Conta de Serviço GCP (Workload Identity) que necessita de acesso Leitor (Viewer):**
+- **`prod-agent-anero-cafe-support@paralax-prod.iam.gserviceaccount.com`**
+- *Nota de Operação:* O proprietário do arquivo no Google Drive deve compartilhar o PDF com este e-mail concedendo permissão de **Leitor (Viewer)**.
 
 ---
 
