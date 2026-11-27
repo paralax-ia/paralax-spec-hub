@@ -38,11 +38,11 @@ status: APPROVED
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
 > **Scope:** Agente de IA (`anero-cafe-support`) e GitOps (`argocd`)  
 > **Bounded Context:** Conversational Agent / Canais & Envio de Documentos  
-> **Status:** DRAFT  
+> **Status:** APPROVED  
 > **Autor:** Eduardo F. Santos  
 > **Data de Criação:** 2026-11-26  
 > **Parent Spec:** [`SPEC-016`](./SPEC-016-integracao-google-drive-conhecimento-agentes.md) (Infraestrutura de leitura do Google Drive)  
-> **Arquitetura 12-Factor:** Zero arquivos binários no Git; o catálogo reside no Google Drive sob o ID `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID` injetado via variáveis de ambiente centralizadas no ArgoCD.  
+> **Arquitetura 12-Factor:** Zero arquivos binários e URLs públicas fictícias no código; o catálogo reside no Google Drive sob o ID `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID` injetado via variáveis de ambiente centralizadas no ArgoCD.  
 
 ---
 
@@ -58,11 +58,11 @@ Na arquitetura anterior (estabelecida pela **SPEC-018**), a resposta era gerada 
 A cafeteria possui um **catálogo oficial diagramado em formato PDF**, mantido e atualizado de forma centralizada em uma pasta do **Google Drive**.
 
 Esta especificação define:
-1. Uma **nova ferramenta (tool)** no agente `anero-cafe-support` para disponibilizar o PDF oficial do catálogo.
-2. A integração transparente para que o documento do Google Drive seja servido com terminação `.pdf`, permitindo que o orquestrador (`evo-bot-runtime`) e o CRM o enviem como **documento/arquivo nativo no WhatsApp**.
+1. Uma **nova ferramenta (tool)** no agente `anero-cafe-support` (`send_catalog_pdf`) para disponibilizar o link oficial do PDF do catálogo no Google Drive.
+2. Aderência estrita ao **12-Factor**: o agente não expõe rotas HTTP de assets nem inventa domínios públicos fictícios. Ele consome unicamente a variável declarativa `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`.
 3. O fluxo conversacional determinístico de atendimento:
    - Mensagem inicial: `"Deixa eu te mandar o nosso catálogo aqui"`
-   - Disparo do documento PDF.
+   - Disparo do link oficial do Google Drive retornado pela ferramenta.
    - Mensagem de fechamento: `"Dá uma olhada, eu tiro suas dúvidas e a gente monta o seu pedido"`
 4. A manutenção das ferramentas de consulta pontual (`coffee_search`, `get_coffee_details`) para sanar dúvidas específicas (notas sensoriais, torra, moagens) após o cliente consultar o PDF.
 
@@ -70,16 +70,15 @@ Esta especificação define:
 
 ## 2. Escopo e Repositórios Afetados (Ondas Topológicas)
 
-- [ ] **Sub-tarefa 1 (`paralax-ia/anero-cafe-support`):** [Onda 1] Implementação da tool `send_catalog_pdf`, rota HTTP estática de download/cache do PDF do Google Drive (`GET /assets/catalogo_anero.pdf`), atualização dos prompts governados no Langfuse e suíte de testes unitários com TDD.
-- [ ] **Sub-tarefa 2 (`paralax-ia/argocd`):** [Onda 2] Declaração declarativa 12-Factor das variáveis `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID` e `CATALOG_PDF_PUBLIC_URL` no overlay `prod/anero-cafe-support`.
+- [x] **Sub-tarefa 1 (`paralax-ia/anero-cafe-support`):** [Onda 1] Implementação da tool `send_catalog_pdf` (construindo o link do Drive a partir de `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`), atualização dos prompts governados no Langfuse e suíte de testes unitários com TDD. [PR #48](https://github.com/paralax-ia/anero-cafe-support/pull/48)
+- [ ] **Sub-tarefa 2 (`paralax-ia/argocd`):** [Onda 2] Declaração declarativa 12-Factor da variável `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID: "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"` no overlay `prod/anero-cafe-support` (`patch-env.yaml`).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        ONDA 1: AGENTE DE IA                            │
 │                    paralax-ia/anero-cafe-support                       │
-│  • Tool `send_catalog_pdf` (ou `get_catalog_pdf`)                      │
-│  • Rota de cache/serving: `GET /assets/catalogo_anero.pdf`             │
-│  • Consumo do Drive via Service Account (Workload Identity SPEC-016)   │
+│  • Tool `send_catalog_pdf` (devolve link oficial do Google Drive)      │
+│  • Consumo 12-Factor de `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`             │
 │  • Prompts governados: `anero_cafe/instruction` e `atendimento_normal` │
 │  • Testes TDD com docstrings `Business Rule:`                          │
 └───────────────────────────────────┬────────────────────────────────────┘
@@ -89,7 +88,7 @@ Esta especificação define:
 │                          ONDA 2: GITOPS                                │
 │                         paralax-ia/argocd                              │
 │  • Injeção de `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID` no overlay de prod     │
-│  • Injeção de `CATALOG_PDF_PUBLIC_URL` no deployment do agente         │
+│  • Permissão Leitor para a Service Account do agente no Google Drive   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -97,25 +96,16 @@ Esta especificação define:
 
 ## 3. Contratos de Arquitetura e Engenharia
 
-### 3.1. Viabilidade Técnica e Mecanismo de Disparo de Documentos
+### 3.1. Viabilidade Técnica e Mecanismo de Disparo do Link do Catálogo
 
-1. **Restrição Arquitetural do Orquestrador de Mensageria (`evo-bot-runtime` & `evo-ai-crm-community`):**
-   - O detector de mídia do CRM (`MediaTypeDetector`) e do orquestrador (`extractMediaURLs`) analisa a extensão do arquivo na URL:
-     ```ruby
-     path = url.to_s.split(/[?#]/, 2).first.to_s
-     segment = path.split('/').last.to_s
-     ext = segment.split('.').last.to_s.downcase
-     # DOCUMENT_EXT = %w[pdf doc docx xls xlsx ppt pptx txt rtf odt]
-     ```
-   - Uma URL direta padrão do Google Drive (ex: `https://drive.google.com/file/d/{FILE_ID}/view` ou `https://drive.google.com/uc?export=download&id={FILE_ID}`) termina em `/view` ou `/uc`. Como não termina em `.pdf`, o orquestrador não a reconhece como mídia e o WhatsApp a exibe como texto puro, além de falhar no download automático devido a cookies/telas de confirmação do Google.
-2. **Solução Arquitetural: Serving de Cache com Extensão `.pdf` no Pod:**
-   - O agente `anero-cafe-support` (FastAPI) expõe a rota pública:
-     `GET /assets/catalogo_anero.pdf`
-   - O pod utiliza a biblioteca `paralax-agents-common` e as credenciais Workload Identity da Service Account para baixar o arquivo binário correspondente a `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`.
-   - O binário é mantido em cache local em memória/disco com TTL (ex: 3600 segundos).
-   - O endpoint responde com `Content-Type: application/pdf` e `Content-Disposition: inline; filename="catalogo_anero.pdf"`.
-   - A tool `send_catalog_pdf` retorna a URL canônica `https://<dominio-anero>/assets/catalogo_anero.pdf`.
-   - O orquestrador detecta a extensão `.pdf` no path e despacha a requisição com `postbackAttachment{URL: "...", FileType: "file"}`, entregando o documento PDF nativo no WhatsApp.
+1. **Acesso Direto ao Google Drive:**
+   - O arquivo PDF do catálogo já está hospedado e mantido no Google Drive.
+   - O pod do agente roda em rede privada interna do cluster GKE e não deve atuar como servidor de arquivos nem expor URLs públicas fictícias.
+2. **Contrato da Tool `send_catalog_pdf`:**
+   - A ferramenta recupera o ID da variável `config.GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`.
+   - Retorna o link oficial de visualização do Google Drive:
+     `https://drive.google.com/file/d/{GOOGLE_DRIVE_CATALOG_PDF_FILE_ID}/view?usp=drive_link`
+   - Caso a variável esteja vazia, retorna fallback seguro para o Google Drive sem quebrar a execução.
 
 ### 3.2. Regras de Negócio Conversacionais e Fluxo de Atendimento
 
@@ -130,7 +120,7 @@ O agente deve estruturar a resposta contendo:
 1. Frase de Abertura:
    `"Deixa eu te mandar o nosso catálogo aqui"`
 2. Disparo da Tool:
-   Invocação da ferramenta `send_catalog_pdf` (que injeta a URL do PDF a ser extraída pelo runtime).
+   Invocação da ferramenta `send_catalog_pdf` (que injeta o link oficial do Google Drive na resposta).
 3. Frase de Fechamento:
    `"Dá uma olhada, eu tiro suas dúvidas e a gente monta o seu pedido"`
 
@@ -148,13 +138,31 @@ O agente deve estruturar a resposta contendo:
 
 ---
 
+### 3.3. Configuração GitOps no ArgoCD (`paralax-ia/argocd`)
+
+No repositório `argocd`, no manifesto `prod/anero-cafe-support/patch-env.yaml`:
+```yaml
+- name: GOOGLE_DRIVE_CATALOG_PDF_FILE_ID
+  value: "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"
+```
+
+**Arquivo Alvo no Google Drive:**
+- **Link Oficial:** `https://drive.google.com/file/d/1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB/view?usp=drive_link`
+- **File ID:** `1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB`
+
+**Conta de Serviço GCP (Workload Identity) que necessita de acesso Leitor (Viewer):**
+- **`prod-agent-anero-cafe-support@paralax-prod.iam.gserviceaccount.com`**
+- *Nota de Operação:* O proprietário do arquivo no Google Drive deve compartilhar o PDF com este e-mail concedendo permissão de **Leitor (Viewer)**.
+
+---
+
 ### 3.5. Governança de Prompts (SPEC-PROMPT-01 & Langfuse SSOT)
 
 - **Prompt 1:** `anero_cafe/instruction`
   - **Repositório:** `paralax-ia/anero-cafe-support`
   - **Arquivo Local / Fallback:** `anero_cafe/prompts.py` (constante `INSTRUCTION`)
   - **Papel:** Instrução mestra de sistema do agente Anero Café
-  - **Alteração:** Adição da regra de disparo de PDF em `<tools_and_search>` e substituição da orientação de envio de sumário longo de texto pela tríade determinística (abertura, tool de PDF e fechamento).
+  - **Alteração:** Adição da regra de disparo de PDF em `<tools_and_search>` e `<catalog_pdf_dispatch_rule>` com a tríade determinística (abertura, tool `send_catalog_pdf` e fechamento).
   - **Idioma:** Estritamente em inglês nas diretrizes de sistema, com as frases de resposta literal em português do Brasil (PT-BR).
 
 - **Prompt 2:** `anero_cafe/atendimento_normal`
@@ -171,16 +179,15 @@ O agente deve estruturar a resposta contendo:
 Funcionalidade: Disparo de Catálogo em PDF via Google Drive no Anero Café
 
   Contexto:
-    Dado que a variável "GOOGLE_DRIVE_CATALOG_PDF_FILE_ID" está configurada com um ID de arquivo válido no Drive
-    E que a Service Account do pod possui permissão de leitura no arquivo
-    E que o endpoint "GET /assets/catalogo_anero.pdf" responde com status 200 e tipo "application/pdf"
+    Dado que a variável "GOOGLE_DRIVE_CATALOG_PDF_FILE_ID" está configurada com "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"
+    E que a Service Account "prod-agent-anero-cafe-support@paralax-prod.iam.gserviceaccount.com" possui permissão de leitura no arquivo
 
   Cenário: Cliente pergunta sobre catálogo geral de produtos
     Dado um cliente no canal WhatsApp iniciando atendimento
     Quando o cliente enviar a mensagem "Vocês têm catálogo de cafés? Pode me mandar?"
     Então o agente deve responder com a frase inicial "Deixa eu te mandar o nosso catálogo aqui"
     E deve invocar a tool "send_catalog_pdf"
-    E a mensagem deve conter a URL do catálogo com terminação ".pdf"
+    E a mensagem deve conter o link oficial do Google Drive
     E o agente deve finalizar com "Dá uma olhada, eu tiro suas dúvidas e a gente monta o seu pedido".
 
   Cenário: Cliente pergunta sobre a tabela de preços dos cafés
@@ -198,17 +205,10 @@ Funcionalidade: Disparo de Catálogo em PDF via Google Drive no Anero Café
     E deve invocar a ferramenta "get_coffee_details" ou "coffee_search"
     E responder objetivamente às dúvidas do cliente sobre o produto.
 
-  Cenário: Detecção de anexo pelo orquestrador de mensageria
-    Dado que a resposta do agente contém o link "https://anero-cafe.paralax.ia/assets/catalogo_anero.pdf"
-    Quando o orquestrador "evo-bot-runtime" processar o retorno do agente
-    Então a função "extractMediaURLs" deve identificar o link como attachment do tipo "file"
-    E encaminhar o anexo de documento PDF nativo para entrega no WhatsApp.
-
-  Cenário: Resiliência em caso de falha de conexão com o Google Drive
-    Dado que o pod já realizou o download prévio do catálogo e o mantém em cache local
-    Quando ocorrer uma indisponibilidade temporária na Google Drive API
-    Então a rota "GET /assets/catalogo_anero.pdf" deve continuar servindo a cópia em cache
-    E registrar aviso de log sem interromper o atendimento aos clientes.
+  Cenário: Execução da tool com variável de ambiente declarativa
+    Dado que a configuração do agente possui "GOOGLE_DRIVE_CATALOG_PDF_FILE_ID" preenchido
+    Quando a ferramenta "send_catalog_pdf" for executada
+    Então ela deve retornar "https://drive.google.com/file/d/1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB/view?usp=drive_link".
 ```
 
 ---
@@ -216,15 +216,15 @@ Funcionalidade: Disparo de Catálogo em PDF via Google Drive no Anero Café
 ## 5. Plano de Rollout e Compatibilidade
 
 1. **Onda 1 (`anero-cafe-support`):**
-   - Criar branch `feat/spec-021-disparo-catalogo-pdf-drive`.
-   - Implementar rota `/assets/catalogo_anero.pdf` e tool `send_catalog_pdf`.
+   - Branch `agent/paralax-spec-021-anero-cafe-support`.
+   - Tool `send_catalog_pdf` conectada a `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID`.
    - Atualizar constantes de prompt em `anero_cafe/prompts.py` e sincronizar rascunho (`draft`) no Langfuse.
-   - Criar testes unitários em `tests/unit/test_catalog_pdf.py` com TDD.
+   - Testes unitários em `tests/unit/test_catalog_pdf.py` com TDD validando contratos.
    - Validar com `just verify`.
-   - Submeter PR via `gh pr create`.
+   - PR [#48](https://github.com/paralax-ia/anero-cafe-support/pull/48).
 2. **Onda 2 (`argocd`):**
-   - Criar branch `feat/spec-021-argocd-catalog-pdf-config`.
-   - Declarar `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID` e `CATALOG_PDF_PUBLIC_URL` no overlay `prod/anero-cafe-support`.
+   - Branch `agent/paralax-spec-021-argocd`.
+   - Declarar `GOOGLE_DRIVE_CATALOG_PDF_FILE_ID: "1ORQJaJjceD9DqU4ZLR_jAOqtrR9vGWlB"` no overlay `prod/anero-cafe-support`.
    - Submeter PR via `gh pr create`.
 3. **Fechamento e Promoção:**
    - Promover os prompts no Langfuse SSOT para `production`.
