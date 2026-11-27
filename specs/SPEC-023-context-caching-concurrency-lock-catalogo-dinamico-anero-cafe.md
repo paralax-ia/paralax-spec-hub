@@ -384,7 +384,7 @@ async def run_agent(request: CrmRequest):
   - Adicionar suíte de testes unitários em `tests/paralax/agents/common/test_app.py`.
   - Publicar release patch via CI/CD no Artifact Registry.
 
-- [ ] **Onda 1B (`paralax-ia/paralax-evo-crm` - SDK):**
+- [x] **Onda 1B (`paralax-ia/paralax-evo-crm` - SDK):** [PR #50](https://github.com/paralax-ia/paralax-evo-crm/pull/50)
   - Implementar o decorator `@conversation_lock` em `paralax/evo/crm/lock.py`.
   - Suíte de testes unitários com TDD em `tests/paralax/evo/crm/test_lock.py` (cobrindo lock adquirido, lock colidido, liberação no finally e fallback em falhas de Redis).
   - Publicar release patch via CI/CD no Artifact Registry.
