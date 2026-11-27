@@ -1,6 +1,6 @@
 ---
 spec_id: SPEC-023
-title: "Context Caching no ADK, Injeção Dinâmica da Lista de Preços no System Prompt e Lock de Concorrência por Conversa no Backend"
+title: "Context Caching no ADK, Injeção Dinâmica da Lista de Preços no System Prompt e Lock de Concorrência via Decorator no SDK"
 product:
   - anero-cafe-support
   - paralax-platform
@@ -9,14 +9,17 @@ scope: multi-repo
 bounded_context: "Conversational Agent / Performance, Cache & Concorrência"
 origin_module: paralax-spec-hub
 target_repositories:
-  - repo: paralax-ia/anero-cafe-support
+  - repo: paralax-ia/paralax-evo-crm
     wave: 1
+    role: sdk
+  - repo: paralax-ia/anero-cafe-support
+    wave: 2
     role: ai-agent
     prompts:
       - anero_cafe/instruction
       - anero_cafe/atendimento_normal
   - repo: paralax-ia/argocd
-    wave: 2
+    wave: 3
     role: gitops
 prompts:
   - name: anero_cafe/instruction
@@ -32,11 +35,11 @@ prompts:
 status: APPROVED
 ---
 
-# SPEC-023: Context Caching no ADK, Injeção Dinâmica da Lista de Preços no System Prompt e Lock de Concorrência por Conversa no Backend
+# SPEC-023: Context Caching no ADK, Injeção Dinâmica da Lista de Preços no System Prompt e Lock de Concorrência via Decorator no SDK
 
 > **Product:** [`anero-cafe-support`](../products/anero-cafe-support.yaml) | [`paralax-platform`](../products/paralax-platform.yaml)  
 > **Business Capability:** [`conversational-ai-agent`](../capabilities/conversational-ai-agent/capability.yaml)  
-> **Scope:** Agente de IA (`anero-cafe-support`) e GitOps (`argocd`)  
+> **Scope:** SDK Compartilhado (`paralax-evo-crm`), Agente de IA (`anero-cafe-support`) e GitOps (`argocd`)  
 > **Bounded Context:** Conversational Agent / Performance, Cache & Concorrência  
 > **Status:** APPROVED  
 > **Autor:** Eduardo F. Santos  
@@ -57,8 +60,8 @@ Esta especificação possui **três objetivos estritos e bem definidos**:
    Configurar `context_cache_config` na entidade `App` do ADK para criar e manter em cache no Vertex AI o prefixo fixo da aplicação (system instruction longo + schemas de ferramentas), reduzindo drasticamente o TTFT (*Time to First Token*) e o custo de inferência.
 2. **Evitar a Chamada de Tool para a Lista de Preços (Solução A):**
    Baixar o arquivo da **lista de preços** (`GOOGLE_DRIVE_PF_FILE_ID`) via callback no início do agente (`before_agent`), utilizando **validação de alteração do arquivo** (`modifiedTime` / `md5Checksum`) no Google Drive para só baixar se houver alteração real, e injetar o texto da lista de preços diretamente no **system prompt**. Com isso, o modelo responde sobre cafés e preços em **1 único turno de LLM**, eliminando a tool call redundante de `get_catalog_overview` (que demorava 136s por turno).
-3. **Criar o Lock por Conversa no Backend (Solução C):**
-   Implementar um Mutex Distribuído no Redis por `conversation_id` (`crm_lock:{context_id}`) no endpoint `/crm/run` do backend Python, garantindo que múltiplas mensagens enviadas em rajada pelo usuário não disparem execuções concorrentes na mesma sessão do Vertex AI.
+3. **Criar o Lock por Conversa no Backend via Decorator Reutilizável no SDK (Solução C):**
+   Implementar um decorator reutilizável `@conversation_lock` no pacote SDK `paralax-evo-crm` (`paralax.evo.crm.lock`). O decorator gerencia a aquisição atômica e liberação de lock distribuído no Redis por `conversation_id` (`crm_lock:{context_id}`), protegendo qualquer endpoint de agente contra colisões decorrentes de múltiplas mensagens em rajada sem poluir o código do agente com boilerplate de Redis.
 
 ---
 
@@ -96,9 +99,10 @@ Esta especificação possui **três objetivos estritos e bem definidos**:
                                     ▲
                                     │
  ┌────────────────────────────────────────────────────────────────────────┐
- │         FastAPI Router (/crm/run) com Lock por Conversa (Solução C)    │
- │   • Distributed Lock no Redis por conversation_id (crm_lock:{id})      │
- │   • Bloqueia requisições simultâneas na mesma sessão Vertex AI         │
+ │     SDK paralax-evo-crm: @conversation_lock (Reutilizável / Solução C) │
+ │   • Decorator assíncrono: @conversation_lock(ttl_seconds=180)          │
+ │   • Adquire crm_lock:{context_id} no Redis de forma não-bloqueante     │
+ │   • Rejeita chamadas concorrentes da mesma conversa com retorno seguro │
  │   • Liberação atômica no bloco finally                                 │
  └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -167,30 +171,98 @@ Localização: `anero_cafe/services/price_list_sync.py` e `anero_cafe/shared_lib
 
 ---
 
-### 3.3. Pilar 3: Lock Distribuído de Concorrência por Conversa no Backend (Solução C)
-Localização: `anero_cafe/routers/crm.py`
+### 3.3. Pilar 3: Decorator Reutilizável de Lock por Conversa no SDK `paralax-evo-crm` (Solução C)
+Localização: `paralax/evo/crm/lock.py` (no repositório `paralax-evo-crm`)
 
-1. **Mecanismo de Lock no FastAPI (`POST /crm/run`):**
-   - Ao receber a requisição do CRM/runtime, tenta adquirir a chave `crm_lock:{context_id}` no Redis de forma atômica e não-bloqueante (`nx=True`, `ex=180`):
-     ```python
-     lock_acquired = await redis_client.set(
-         f"crm_lock:{context_id}", "locked", nx=True, ex=180
-     )
-     if not lock_acquired:
-         logger.warning(
-             "Concorrência detectada: requisição para contextId %s ignorada pois outra chamada já está em processamento.",
-             context_id,
-         )
-         return {
-             "jsonrpc": "2.0",
-             "id": request.id,
-             "result": {"artifacts": [{"parts": [{"type": "text", "text": ""}]}]},
-         }
-     ```
-   - No bloco `finally`, a chave `crm_lock:{context_id}` é liberada, garantindo que o lock nunca fique preso em caso de erro ou término normal.
+Para evitar duplicação de lógica e garantir que todos os agentes do ecossistema possam se proteger contra rajadas de mensagens, o lock distribuído é encapsulado em um decorator reutilizável no SDK comum.
 
-2. **Benefício de Concorrência:**
-   - Impede que rajadas de mensagens do cliente (ex: "oi", e 3 segundos depois "quais cafés têm?") disparem múltiplos pipelines simultâneos disputando a mesma sessão do Vertex AI (`agentengine://`), evitando colisão de eventos e timeouts em cascata.
+1. **Definição e Assinatura do Decorator (`paralax.evo.crm.lock`):**
+```python
+from functools import wraps
+import logging
+from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
+
+
+def conversation_lock(
+    ttl_seconds: int = 180,
+    key_prefix: str = "crm_lock",
+) -> Callable[..., Any]:
+    """Decorator assíncrono para garantir lock distribuído por conversa no Redis.
+
+    Business Rule: Impede que mensagens simultâneas da mesma conversa (rajadas ou
+    mensagens rápidas) executem pipelines concorrentes na mesma sessão do LLM,
+    evitando conflito de estado, corrupção de sessão e exaustão de cotas.
+
+    Args:
+        ttl_seconds: Tempo de vida do lock no Redis em segundos (safety backstop).
+        key_prefix: Prefixo da chave de lock no Redis.
+
+    Returns:
+        Função decorada com proteção de concorrência.
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            # 1. Extração do context_id e do request a partir de args/kwargs
+            request = kwargs.get("request")
+            if not request and args:
+                for arg in args:
+                    if hasattr(arg, "params") and hasattr(arg.params, "context_id"):
+                        request = arg
+                        break
+
+            context_id = None
+            if request and hasattr(request, "params"):
+                context_id = getattr(request.params, "context_id", None)
+
+            # 2. Resolução do cliente Redis
+            redis_client = kwargs.get("redis_client")
+            if not redis_client and hasattr(func, "__self__"):
+                redis_client = getattr(func.__self__, "redis_client", None)
+
+            # Se não houver context_id ou redis_client, prossegue sem lock
+            if not context_id or not redis_client:
+                return await func(*args, **kwargs)
+
+            lock_key = f"{key_prefix}:{context_id}"
+            lock_acquired = await redis_client.set(lock_key, "locked", nx=True, ex=ttl_seconds)
+
+            if not lock_acquired:
+                logger.warning(
+                    "Concorrência detectada: chamada para contextId %s ignorada pois outra requisição já está em processamento.",
+                    context_id,
+                )
+                request_id = getattr(request, "id", None)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"artifacts": [{"parts": [{"type": "text", "text": ""}]}]},
+                }
+
+            try:
+                return await func(*args, **kwargs)
+            finally:
+                try:
+                    await redis_client.delete(lock_key)
+                except Exception as cleanup_err:
+                    logger.error("Erro ao liberar lock %s: %s", lock_key, cleanup_err)
+
+        return wrapper
+    return decorator
+```
+
+2. **Consumo Elegante no Agente (`anero_cafe/routers/crm.py`):**
+No agente `anero-cafe-support`, o endpoint simplesmente importa e aplica o decorator:
+```python
+from paralax.evo.crm.lock import conversation_lock
+
+@router.post("/run")
+@conversation_lock(ttl_seconds=180)
+async def run_agent(request: CrmRequest):
+    ...
+```
 
 ---
 
@@ -220,7 +292,7 @@ Localização: `anero_cafe/routers/crm.py`
 - **Dado** que o cliente pede expressamente *"Me manda o catálogo em PDF"*
 - **Quando** o agente processar a mensagem
 - **Então** a tool `send_catalog_pdf` deve ser invocada
-- **E** a URL do catálogo PDF oficial (arquivo 1) deve ser retornada para entrega do anexo.
+- **E** a URL do catálogo PDF oficial (arquivo 1) deve ser retornada para entrega do anexo nativo.
 
 ### Cenário 5: Habilitação de Context Caching no Google ADK
 - **Dado** que o serviço `anero-cafe-support` é inicializado
@@ -228,26 +300,32 @@ Localização: `anero_cafe/routers/crm.py`
 - **Então** a instância de `App` deve conter `context_cache_config` configurada com `ttl_seconds=1800` e `min_tokens=2048`
 - **E** o log não deve apresentar warning de `can transfer between agents but has no context_cache_config`.
 
-### Cenário 6: Bloqueio de concorrência por conversa no backend (Solução C)
-- **Dado** que uma mensagem para a conversa `conv-123` está em processamento no pod
-- **Quando** uma segunda requisição HTTP para a mesma conversa `conv-123` chegar ao endpoint `/crm/run`
-- **Então** o router deve detectar a chave `crm_lock:conv-123` no Redis
-- **E** não deve disparar uma segunda execução concorrente na mesma sessão do Vertex AI.
+### Cenário 6: Bloqueio de concorrência por conversa no backend via decorator (Solução C)
+- **Dado** que uma requisição para a conversa `conv-123` está em processamento no pod
+- **Quando** uma segunda requisição HTTP para a mesma conversa `conv-123` chegar ao endpoint decorado com `@conversation_lock`
+- **Então** o decorator deve detectar o lock ativo no Redis
+- **E** retornar resposta segura sem disparar execução simultânea na sessão do Vertex AI.
 
 ---
 
-## 5. Plano de Rollout e Tarefas
+## 5. Plano de Rollout e Decomposição em Ondas Topológicas
 
-- [ ] **Onda 1 (`paralax-ia/anero-cafe-support`):**
+- [ ] **Onda 1 (`paralax-ia/paralax-evo-crm` - SDK):**
+  - Implementar o decorator `@conversation_lock` em `paralax/evo/crm/lock.py`.
+  - Suíte completa de testes unitários com TDD em `tests/paralax/evo/crm/test_lock.py` (cobrindo lock adquirido, lock colidido, liberação no finally e fallback em falhas de Redis).
+  - Publicar release patch via CI/CD no Artifact Registry.
+
+- [ ] **Onda 2 (`paralax-ia/anero-cafe-support` - Agente de IA):**
+  - Atualizar dependência `paralax-evo-crm` via `uv sync`.
+  - Decorar o router `/crm/run` com `@conversation_lock`.
   - Implementar `PriceListSyncService` em `anero_cafe/services/price_list_sync.py` com testes unitários em `tests/unit/test_price_list_sync.py`.
   - Integrar `before_agent` em `anero_cafe/shared_libraries/callbacks.py` para injetar a lista de preços no system prompt.
   - Instanciar `App` com `ContextCacheConfig` em `anero_cafe/agent.py` e exportar em `anero_cafe/__init__.py`.
-  - Implementar o Distributed Lock no Redis por `conversation_id` em `anero_cafe/routers/crm.py`.
   - Sincronizar prompts atualizados no Langfuse (`anero_cafe/instruction` e `anero_cafe/atendimento_normal`).
-  - Executar suíte de validação (`just verify`).
+  - Executar suíte completa de verificação (`just verify`).
   - Abrir PR no repositório `anero-cafe-support`.
 
-- [ ] **Onda 2 (`paralax-ia/argocd`):**
+- [ ] **Onda 3 (`paralax-ia/argocd` - GitOps):**
   - Adicionar variáveis declarativas de ambiente no manifesto do `anero-cafe-support`:
     - `ENABLE_CONTEXT_CACHE=true`
     - `CONTEXT_CACHE_TTL_SECONDS=1800`
