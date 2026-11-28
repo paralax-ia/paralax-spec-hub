@@ -389,7 +389,7 @@ async def run_agent(request: CrmRequest):
   - Suíte de testes unitários com TDD em `tests/paralax/evo/crm/test_lock.py` (cobrindo lock adquirido, lock colidido, liberação no finally e fallback em falhas de Redis).
   - Publicar release patch via CI/CD no Artifact Registry.
 
-- [ ] **Onda 2 (`paralax-ia/anero-cafe-support` - Agente de IA):**
+- [x] **Onda 2 (`paralax-ia/anero-cafe-support` - Agente de IA):** [PR #59](https://github.com/paralax-ia/anero-cafe-support/pull/59)
   - Atualizar dependências (`paralax-agents-common` e `paralax-evo-crm`) via `uv sync`.
   - Instanciar `App` utilizando `from paralax.agents.common.app import create_cached_app` e exportar em `anero_cafe/__init__.py`.
   - Decorar o router `/crm/run` com `@conversation_lock`.
