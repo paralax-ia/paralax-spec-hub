@@ -38,7 +38,10 @@ context_map:
   - paralax-support
   - anero-cafe-support
   - paralax-site
-specs: []
+specs:
+  - spec_id: SPEC-017
+    repo: paralax-ia/paralax-spec-hub
+    status: DRAFT
 runtime_contracts:
   classes:
   - name: Violation
