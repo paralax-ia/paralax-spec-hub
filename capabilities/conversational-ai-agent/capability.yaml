@@ -91,10 +91,14 @@ runtime_contracts:
   - name: AstSensor
     methods:
     - add_violation
+    - check_mutable_defaults
     - visit_function
     - visit_FunctionDef
     - visit_AsyncFunctionDef
     - visit_ClassDef
+    - visit_Try
+    - visit_Assign
+    - visit_AnnAssign
     - visit_Raise
   - name: CICDViolation
     methods:
@@ -105,18 +109,44 @@ runtime_contracts:
     - validate_file
     - check_line_rules
     - run
+  - name: ComplexityViolation
+    methods:
+    - format_output
   - name: RoutingResult
     methods:
     - to_dict
+  - name: ConfigViolation
+    methods:
+    - format_output
   - name: Diagnostic
     methods:
     - key
   - name: Comparison
     methods: []
+  - name: DriveFileMetadata
+    methods: []
+  - name: GoogleDriveContentManager
+    methods:
+    - get_content
+  - name: GoogleDrivePdfManager
+    methods:
+    - get_pdf_url
+    - verify_integrity
   - name: PrivacyMaskingSpanProcessor
     methods:
     - on_start
     - on_end
+  - name: PromptSecurityValidator
+    methods: []
+  - name: PromptManagementEndpoints
+    methods:
+    - refresh_prompt
+    - prompt_status
+  - name: DynamicPromptManager
+    methods:
+    - get_instruction
+    - refresh
+    - get_status
   - name: CodeBlockReplacer
     methods:
     - save_code

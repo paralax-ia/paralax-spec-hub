@@ -80,14 +80,24 @@ runtime_contracts:
     - key
   - name: Comparison
     methods: []
+  - name: conversation_lock
+    methods: []
+  - name: ContactType
+    methods: []
+  - name: CustomerClassification
+    methods: []
+  - name: ContactClassificationStatus
+    methods: []
   - name: CrmMessagePart
     methods:
     - is_audio
+    - is_image
     - to_genai_part
   - name: CrmMessage
     methods:
     - get_text
     - has_audio
+    - has_image
     - to_genai_content
   - name: CrmParams
     methods: []
@@ -99,17 +109,33 @@ runtime_contracts:
     methods: []
   - name: HealthStatus
     methods: []
-  - name: PipelineStage
+  - name: PipelineItemService
     methods: []
   - name: PipelineItem
     methods: []
+  - name: PipelineStage
+    methods: []
   - name: Pipeline
     methods:
+    - all_items
     - find_stage_by_name
+  - name: CRMContact
+    methods:
+    - is_company
+    - has_cnpj
+    - has_cpf
+  - name: LineClassificationResult
+    methods: []
+  - name: ConversationSummary
+    methods: []
+  - name: MobileHandoffResult
+    methods: []
   - name: CrmWebhookHandler
     methods:
     - is_audio_enabled
     - get_audio_disabled_fallback_message
+    - is_image_enabled
+    - get_image_disabled_fallback_message
     - resolve_audio_model_overrides
     - build_artifacts_response
     - run_crm
@@ -119,9 +145,11 @@ runtime_contracts:
     methods: []
   - name: CRMAPIClient
     methods:
+    - resolve_drive_pdf_url
     - send_message
     - toggle_conversation_status
     - get_conversation_sync
+    - get_conversation
     - get_inbox_sync
     - get_schedule_summary
     - check_out_of_office
@@ -130,31 +158,18 @@ runtime_contracts:
     - get_pipelines_by_conversation
     - create_pipeline_item
     - move_pipeline_item
+    - get_pipeline_details
+    - update_pipeline_item_services
+    - set_pipeline_item_service
+    - clear_pipeline_item_services
     - ensure_conversation_in_pipeline
-  - name: Violation
-    methods: []
-  - name: AstSensor
-    methods:
-    - add_violation
-    - visit_function
-    - visit_FunctionDef
-    - visit_AsyncFunctionDef
-    - visit_ClassDef
-    - visit_Raise
-  - name: CICDViolation
-    methods:
-    - format_output
-  - name: CICDValidator
-    methods:
-    - find_target_files
-    - validate_file
-    - check_line_rules
-    - run
-  - name: RoutingResult
-    methods:
-    - to_dict
-  - name: Diagnostic
-    methods:
-    - key
-  - name: Comparison
-    methods: []
+    - get_contact_sync
+    - get_contact
+    - get_contact_by_phone
+    - create_contact
+    - get_or_create_contact
+    - update_contact_tax_id
+    - classify_incoming_line
+    - create_conversation
+    - record_internal_note
+    - notify_phone
