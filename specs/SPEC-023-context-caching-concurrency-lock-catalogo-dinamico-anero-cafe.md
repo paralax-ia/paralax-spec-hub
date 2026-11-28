@@ -1,41 +1,45 @@
 ---
 spec_id: SPEC-023
-title: "Context Caching no ADK via paralax.agents.common.app, Injeção Dinâmica da Lista de Preços e Lock de Concorrência no SDK"
+title: Context Caching no ADK via paralax.agents.common.app, Injeção Dinâmica da Lista
+  de Preços e Lock de Concorrência no SDK
 product:
-  - anero-cafe-support
-  - paralax-platform
+- anero-cafe-support
+- paralax-platform
 capability: conversational-ai-agent
 scope: multi-repo
-bounded_context: "Conversational Agent / Performance, Cache & Concorrência"
+bounded_context: Conversational Agent / Performance, Cache & Concorrência
 origin_module: paralax-spec-hub
 target_repositories:
-  - repo: paralax-ia/paralax-agents-common
-    wave: 1
-    role: shared-library
-  - repo: paralax-ia/paralax-evo-crm
-    wave: 1
-    role: sdk
-  - repo: paralax-ia/anero-cafe-support
-    wave: 2
-    role: ai-agent
-    prompts:
-      - anero_cafe/instruction
-      - anero_cafe/atendimento_normal
-  - repo: paralax-ia/argocd
-    wave: 3
-    role: gitops
+- repo: paralax-ia/paralax-agents-common
+  wave: 1
+  role: shared-library
+- repo: paralax-ia/paralax-evo-crm
+  wave: 1
+  role: sdk
+- repo: paralax-ia/anero-cafe-support
+  wave: 2
+  role: ai-agent
+  prompts:
+  - anero_cafe/instruction
+  - anero_cafe/atendimento_normal
+- repo: paralax-ia/argocd
+  wave: 3
+  role: gitops
 prompts:
-  - name: anero_cafe/instruction
-    target_repo: paralax-ia/anero-cafe-support
-    file: anero_cafe/prompts.py
-    symbol: INSTRUCTION
-    description: "Instrução de sistema para o agente Anero Café com a lista de preços embutida dinamicamente no system instruction e suporte a Context Caching"
-  - name: anero_cafe/atendimento_normal
-    target_repo: paralax-ia/anero-cafe-support
-    file: anero_cafe/prompts.py
-    symbol: INSTRUCTION_ATENDIMENTO_NORMAL
-    description: "Prompt de atendimento normal com lista de preços pré-carregada para resposta em único turno e ferramenta send_catalog_pdf preservada para envio de anexo"
-status: APPROVED
+- name: anero_cafe/instruction
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION
+  description: Instrução de sistema para o agente Anero Café com a lista de preços
+    embutida dinamicamente no system instruction e suporte a Context Caching
+- name: anero_cafe/atendimento_normal
+  target_repo: paralax-ia/anero-cafe-support
+  file: anero_cafe/prompts.py
+  symbol: INSTRUCTION_ATENDIMENTO_NORMAL
+  description: Prompt de atendimento normal com lista de preços pré-carregada para
+    resposta em único turno e ferramenta send_catalog_pdf preservada para envio de
+    anexo
+status: MERGED
 ---
 
 # SPEC-023: Context Caching no ADK via paralax.agents.common.app, Injeção Dinâmica da Lista de Preços e Lock de Concorrência no SDK
@@ -379,17 +383,17 @@ async def run_agent(request: CrmRequest):
 
 ## 5. Plano de Rollout e Decomposição em Ondas Topológicas
 
-- [ ] **Onda 1A (`paralax-ia/paralax-agents-common` - Shared Library):**
+- [x] **Onda 1A (`paralax-ia/paralax-agents-common` - Shared Library):** [PR #24](https://github.com/paralax-ia/paralax-agents-common/pull/24)
   - Implementar o módulo `paralax.agents.common.app` com `create_cached_app` e `get_default_context_cache_config`.
   - Adicionar suíte de testes unitários em `tests/paralax/agents/common/test_app.py`.
   - Publicar release patch via CI/CD no Artifact Registry.
 
-- [ ] **Onda 1B (`paralax-ia/paralax-evo-crm` - SDK):**
+- [x] **Onda 1B (`paralax-ia/paralax-evo-crm` - SDK):** [PR #50](https://github.com/paralax-ia/paralax-evo-crm/pull/50)
   - Implementar o decorator `@conversation_lock` em `paralax/evo/crm/lock.py`.
   - Suíte de testes unitários com TDD em `tests/paralax/evo/crm/test_lock.py` (cobrindo lock adquirido, lock colidido, liberação no finally e fallback em falhas de Redis).
   - Publicar release patch via CI/CD no Artifact Registry.
 
-- [ ] **Onda 2 (`paralax-ia/anero-cafe-support` - Agente de IA):**
+- [x] **Onda 2 (`paralax-ia/anero-cafe-support` - Agente de IA):** [PR #59](https://github.com/paralax-ia/anero-cafe-support/pull/59)
   - Atualizar dependências (`paralax-agents-common` e `paralax-evo-crm`) via `uv sync`.
   - Instanciar `App` utilizando `from paralax.agents.common.app import create_cached_app` e exportar em `anero_cafe/__init__.py`.
   - Decorar o router `/crm/run` com `@conversation_lock`.
@@ -399,7 +403,7 @@ async def run_agent(request: CrmRequest):
   - Executar suíte completa de verificação (`just verify`).
   - Abrir PR no repositório `anero-cafe-support`.
 
-- [ ] **Onda 3 (`paralax-ia/argocd` - GitOps):**
+- [x] **Onda 3 (`paralax-ia/argocd` - GitOps):** [PR #40](https://github.com/paralax-ia/argocd/pull/40)
   - Adicionar variáveis declarativas de ambiente no manifesto do `anero-cafe-support`:
     - `ENABLE_CONTEXT_CACHE=true`
     - `CONTEXT_CACHE_TTL_SECONDS=1800`
