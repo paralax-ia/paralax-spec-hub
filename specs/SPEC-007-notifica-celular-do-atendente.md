@@ -58,6 +58,7 @@ No entanto, no comércio conversacional via canais digitais (como WhatsApp), qua
 - **Prompts Estritamente em Inglês (English-Only Prompts):** O template de prompt do LLM para sumarização (`CONVERSATION_SUMMARY_PROMPT_TEMPLATE`) e as instruções de sistema em `anero_cafe/prompts.py` devem ser redigidos exclusivamente em inglês, assegurando precisão, baixa ambiguidade e conformidade estrita com o esquema Pydantic.
 - **Princípio 12-Factor (Zero Config no Git):** O número de telefone do celular do atendente (`ATTENDANT_PHONE_NUMBER`) e as flags de ativação devem ser configurados exclusivamente a partir de variáveis de ambiente (`os.environ`), sem arquivos `.env` ou `.yaml` versionados no Git.
 - **Resiliência e Tolerância a Falhas:** Caso ocorra falha temporária no disparo da mensagem ao celular do atendente via CRM, a ferramenta não deve interromper a interação com o usuário: o link direto `wa.me` deve ser entregue ao cliente como canal de contingência garantido.
+- **Garantia Estrita de Entrega Antes da Transição para Open (Delivery Before Open Transition):** É TERMINANTEMENTE PROIBIDO transicionar o status da conversa para `"open"` ou aplicar o silenciamento de turno no Redis (`crm_handoff:{id}`) antes que a mensagem de transbordo (contendo o link direto do WhatsApp `wa.me`) seja enviada e entregue ao cliente via `crm_api.send_message` na conversa ativa (ainda em status `"pending"`). Como o CRM bloqueia postbacks do bot em conversas que não estejam em `"pending"` (retornando HTTP 422 Unprocessable Entity) e o router do SDK suprime artefatos de LLM ao detectar `crm_handoff`, a ferramenta de transbordo DEVE realizar a entrega direta ao cliente antes de alternar o status para `"open"`.
 - **Padrões de Código Python (PEP 8, Google Docstrings, Sem Funções Aninhadas):** Código 100% aderente aos padrões corporativos, sem blocos `try...except` aninhados ou em imports, com docstrings Google completas.
 
 ---
@@ -247,6 +248,14 @@ async def transfer_to_mobile_attendant(
     ...
 ```
 
+#### Ordem Estrita de Execução no Transbordo (Sequenciamento Obrigatório):
+1. **Resolução de Identidade e Sessão:** Obter o `conversation_id` no CRM a partir da sessão e o `agent_bot_id` mapeado no Redis (`crm_agent_bot_id:{conversation_id}`).
+2. **Notificação ao Atendente:** Se configurado, enviar notificação com o resumo da conversa ao celular do atendente via `crm_api.notify_phone(...)`.
+3. **Disparo da Mensagem ao Cliente:** Enviar a mensagem amigável contendo o link direto do WhatsApp (`wa.me`) diretamente para o cliente na conversa via `crm_api.send_message(context_id=conversation_id, text=customer_msg, sender_id=agent_bot_id)`. **A conversa ainda deve estar com status `"pending"` neste momento.**
+4. **Confirmação de Entrega:** Aguardar a propagação da mensagem no canal (`await asyncio.sleep(1.5)`).
+5. **Transição de Status no CRM:** Apenas após a entrega confirmada da mensagem ao cliente, invocar `crm_api.toggle_conversation_status(conversation_id, status="open")`.
+6. **Trava de Silenciamento no Redis:** Gravar a chave `crm_handoff:{conversation_id}` no Redis (`set(..., "1", ex=86400)`), garantindo que o router do SDK suprima quaisquer artefatos residuais do LLM no encerramento do turno e impeça o agente de reingressar na conversa.
+
 ---
 
 ### 3.4. Configurações 12-Factor no Agente Anero Café (`anero_cafe/config.py`)
@@ -306,14 +315,16 @@ When the customer expresses intent to BUY coffee, place an order, negotiate quan
 - **Dado** que o cliente pergunta: `"Pode me passar o WhatsApp de alguém da loja para eu tirar uma dúvida sobre eventos?"`
 - **Quando** a ferramenta `transfer_to_mobile_attendant` for executada com `action_type="human_request"`
 - **Então** o prompt de sumarização enviado ao LLM deve ser submetido estritamente em inglês (`CONVERSATION_SUMMARY_PROMPT_TEMPLATE`)
-- **E** o status da conversa no CRM deve ser atualizado para `"open"`
-- **E** o link direto do WhatsApp do atendente deve ser entregue ao cliente.
+- **E** a mensagem de transbordo com o link direto do WhatsApp do atendente (`wa.me`) deve ser enviada e entregue ao cliente antes de qualquer transição de status no CRM
+- **E** apenas após a entrega da mensagem a conversa no CRM deve ter seu status atualizado para `"open"`
+- **E** o lock de handoff `crm_handoff:{conversation_id}` deve ser registrado no Redis.
 
 ### Cenário 3: Resiliência em Caso de Falha de Envio de Mensagem ao Atendente
 - **Dado** que a API do CRM ou o canal de mensageria apresente instabilidade temporária (timeout ou HTTP 500) ao disparar a notificação para o celular do atendente
 - **Quando** a ferramenta `transfer_to_mobile_attendant` for executada
 - **Então** a exceção de envio deve ser capturada de forma tolerante (`notification_sent=False`)
-- **E** a ferramenta ainda deve retornar `success=True` com o link `wa.me` válido para o cliente
+- **E** a ferramenta ainda deve enviar o link `wa.me` válido diretamente ao cliente via `crm_api.send_message`
+- **E** a conversa deve ser transicionada para `"open"` após a entrega ao cliente
 - **E** o cliente não deve receber mensagem de erro técnico no chat.
 
 ### Cenário 4: Conformidade 12-Factor e Ausência de Configurações no Git
@@ -326,6 +337,13 @@ When the customer expresses intent to BUY coffee, place an order, negotiate quan
 - **Dado** a suíte de testes de `paralax-evo-crm` e `anero-cafe-support`
 - **Quando** os templates de prompt de sumarização e as instruções da agente forem verificados
 - **Então** todos os prompts de sistema e templates de instrução para LLM devem estar redigidos em inglês.
+
+### Cenário 6: Garantia de Entrega Antes da Transição para Open em Todos os Transbordos
+- **Dado** qualquer ferramenta de transbordo de atendimento (`transfer_to_mobile_attendant` ou `request_human_handoff`)
+- **Quando** o transbordo for acionado
+- **Então** a mensagem de transbordo deve ser enviada diretamente ao cliente via `crm_api.send_message` enquanto a conversa está em status `"pending"`
+- **E** a chamada de `crm_api.toggle_conversation_status(..., status="open")` deve ocorrer ESTRITAMENTE após o sucesso de `crm_api.send_message`
+- **E** a chave `crm_handoff:{conversation_id}` deve ser persistida no Redis para suprimir artefatos residuais e impedir reentrada do bot.
 
 ---
 
